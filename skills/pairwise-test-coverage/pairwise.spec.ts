@@ -68,6 +68,16 @@ describe('generatePairwiseMatrix', () => {
     assert.throws(() => generatePairwiseMatrix({ f0: values, f1: ['a'] }), /too many values/i);
   });
 
+  // Defect: empty values array causes factors[factor][0] to be undefined.
+  // Before fix: bestValue silently became undefined, producing invalid test cases.
+  // After fix: throws early with a clear message identifying the empty factor.
+  it('throws on empty values array', () => {
+    assert.throws(
+      () => generatePairwiseMatrix({ browser: ['chrome'], os: [] }),
+      /Factor "os" has no values/,
+    );
+  });
+
   it('every row has all factor keys', () => {
     const factors = { a: ['1', '2', '3'], b: ['x', 'y'], c: ['p', 'q', 'r'] };
     const matrix = generatePairwiseMatrix(factors);

@@ -34,6 +34,9 @@ node --experimental-strip-types --test skills/breaking-change-detector/breaking-
 
 # WebSocket resilience: 27 tests for backoff, circuit breaker, heartbeat, command ack, gaps, timeouts
 node --experimental-strip-types --test skills/websocket-client-resilience/resilience.spec.ts
+
+# Pairwise input validation: 13 tests including safety rails and edge cases
+node --experimental-strip-types --test skills/pairwise-test-coverage/pairwise.spec.ts
 ```
 
 Each skill ships importable utilities alongside its tests. Import what you need:
@@ -111,7 +114,7 @@ Run the test suites and CLI demo with Node.js 22+ (no install needed):
 git clone https://github.com/apankov1/quality-engineering.git
 cd quality-engineering
 
-# Run all tests (62 tests across all 4 skills)
+# Run all tests (63 tests across all 4 skills)
 node --experimental-strip-types --test \
   skills/pairwise-test-coverage/pairwise.spec.ts \
   skills/barrier-concurrency-testing/test-fixtures.spec.ts \

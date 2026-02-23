@@ -39,8 +39,9 @@ describe('backoff with jitter (pattern 1)', () => {
   // Defect: without jitter, all clients retry at the same instant (thundering herd).
   // Before fix: delay = baseMs * 2^attempt (deterministic).
   // After fix: +/- 25% jitter ensures spread across time window.
+  // Uses 100 samples to make flake probability negligible (P(all identical) ≈ 2^-99).
   it('adds jitter (not deterministic)', () => {
-    const delays = Array.from({ length: 20 }, () => getBackoffDelay(2, 1000, 30000));
+    const delays = Array.from({ length: 100 }, () => getBackoffDelay(2, 1000, 30000));
     const unique = new Set(delays);
     assert.ok(unique.size >= 2, `Expected jitter variation, got ${unique.size} unique values`);
   });

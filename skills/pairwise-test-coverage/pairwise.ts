@@ -191,6 +191,13 @@ export function generatePairwiseMatrix(factors: FactorValues): TestCase[] {
   if (factorNames.length === 0) {
     return [];
   }
+  for (const name of factorNames) {
+    if (factors[name].length === 0) {
+      throw new Error(
+        `Factor "${name}" has no values. Every factor must have at least one value.`,
+      );
+    }
+  }
   if (factorNames.length === 1) {
     return factors[factorNames[0]].map((v) => ({ [factorNames[0]]: v }));
   }
