@@ -7,7 +7,8 @@ on:
     branches: [main]
 
 jobs:
-  test:
+  skill-tests:
+    name: Skill tests — Node ${{ matrix.node-version }}
     runs-on: ubuntu-latest
     strategy:
       matrix:
@@ -20,7 +21,7 @@ jobs:
         with:
           node-version: ${{ matrix.node-version }}
 
-      - name: Run tests
+      - name: Pairwise generator + barrier helpers (19 tests)
         run: |
           node --experimental-strip-types --test \
             skills/pairwise-test-coverage/pairwise.spec.ts \
