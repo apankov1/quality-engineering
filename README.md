@@ -1,6 +1,6 @@
 # QA Skills for AI Coding Agents
 
-Battle-tested QA methodologies extracted from a production real-time multiplayer platform. Deterministic concurrency testing, combinatorial coverage, breaking change detection, and client resilience patterns.
+Production-proven QA methodologies refined through a real-time multiplayer platform. Deterministic concurrency testing, combinatorial coverage, breaking change detection, and client resilience patterns.
 
 These skills teach AI coding agents (Claude Code, Cursor, etc.) rigorous testing methodologies -- not just "write a test", but *how* to test concurrent code, *what* combinations to cover, and *which* invariants to assert.
 
@@ -10,8 +10,8 @@ These skills teach AI coding agents (Claude Code, Cursor, etc.) rigorous testing
 |-------|-------------|----------------|
 | **barrier-concurrency-testing** | Deterministic race condition testing via barriers | Replaces flaky setTimeout-based timing tests with reproducible interleaving |
 | **pairwise-test-coverage** | Combinatorial testing with matrix generator | Zero-dep pairwise algorithm + 5 named invariant assertions + barrier fixtures |
-| **breaking-change-detector** | 6-category breaking change analysis | Tolerant reader pattern for safe schema evolution *(Batch 2)* |
-| **websocket-client-resilience** | Client-side WebSocket resilience patterns | Mobile-aware timeouts, circuit breakers, heartbeat hysteresis *(Batch 2)* |
+| **breaking-change-detector** | 6-category breaking change analysis | Tolerant reader pattern for safe schema evolution |
+| **websocket-client-resilience** | Client-side WebSocket resilience patterns | Mobile-aware timeouts, circuit breakers, heartbeat hysteresis |
 
 ## Install
 
@@ -46,9 +46,9 @@ Ships with real runnable code:
 
 ## Origin
 
-These skills encode hard-won lessons from race conditions, breaking changes, and mobile network failures in a production system running on Cloudflare Workers. They've been generalized for use with any tech stack -- no framework dependencies.
+These skills encode deep lessons from race conditions, breaking changes, and mobile network failures in a production system running on Cloudflare Workers. They've been generalized for use with any tech stack -- no framework dependencies.
 
-The barrier pattern alone prevented 3 data-loss bugs from escaping to production by making race conditions reproducible in CI.
+The barrier pattern alone caught 3 data-loss bugs before they reached production by making race conditions reproducible in CI.
 
 ## Framework Compatibility
 
