@@ -1,50 +1,11 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
+import { classifyFieldChange, classifySerializedSchema } from './breaking-change.ts';
 
 /**
- * Demonstrates the breaking change detection patterns from categories.md.
- * These tests verify the classification logic that the skill teaches agents to apply.
+ * Tests for the breaking change classification utilities.
+ * Verifies the logic from categories.md against concrete examples.
  */
-
-type ChangeKind = 'breaking' | 'safe';
-
-interface FieldChange {
-  action: 'add' | 'remove' | 'rename' | 'widen' | 'narrow' | 'make_optional' | 'make_required';
-  optional?: boolean;
-}
-
-function classifyFieldChange(change: FieldChange): ChangeKind {
-  switch (change.action) {
-    case 'add':
-      return change.optional ? 'safe' : 'breaking';
-    case 'remove':
-    case 'rename':
-    case 'narrow':
-    case 'make_required':
-      return 'breaking';
-    case 'widen':
-    case 'make_optional':
-      return 'safe';
-  }
-}
-
-interface SchemaField {
-  name: string;
-  hasCatchDefault: boolean;
-}
-
-function classifySerializedSchema(fields: SchemaField[]): {
-  safe: boolean;
-  violations: string[];
-} {
-  const violations: string[] = [];
-  for (const field of fields) {
-    if (!field.hasCatchDefault) {
-      violations.push(`${field.name}: missing .catch() default`);
-    }
-  }
-  return { safe: violations.length === 0, violations };
-}
 
 describe('contract field changes (category 1)', () => {
   it('adding optional field is safe', () => {

@@ -1,55 +1,17 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
+import {
+  getBackoffDelay,
+  circuitBreakerTransition,
+  shouldDisconnect,
+  detectSequenceGap,
+  classifyTimeout,
+} from './resilience.ts';
 
 /**
- * Demonstrates the WebSocket resilience patterns from patterns.md.
- * These tests verify the algorithms that the skill teaches agents to implement.
+ * Tests for the WebSocket resilience pattern utilities.
+ * Verifies the algorithms from patterns.md against concrete scenarios.
  */
-
-// Pattern 1: Backoff with jitter
-function getBackoffDelay(attempt: number, baseMs = 1000, maxMs = 30000): number {
-  const exponential = Math.min(baseMs * Math.pow(2, attempt), maxMs);
-  const jitter = exponential * 0.25 * (Math.random() * 2 - 1);
-  return Math.max(0, exponential + jitter);
-}
-
-// Pattern 2: Circuit breaker state
-type CircuitState = 'closed' | 'open' | 'half-open';
-
-function circuitBreakerTransition(
-  state: CircuitState,
-  consecutiveFailures: number,
-  maxFailures: number,
-  cooldownExpired: boolean,
-): CircuitState {
-  if (state === 'closed' && consecutiveFailures >= maxFailures) return 'open';
-  if (state === 'open' && cooldownExpired) return 'half-open';
-  if (state === 'half-open' && consecutiveFailures === 0) return 'closed';
-  if (state === 'half-open' && consecutiveFailures > 0) return 'open';
-  return state;
-}
-
-// Pattern 3: Heartbeat hysteresis
-function shouldDisconnect(missedHeartbeats: number, threshold = 2): boolean {
-  return missedHeartbeats >= threshold;
-}
-
-// Pattern 5: Sequence gap detection
-function detectSequenceGap(
-  lastReceived: number,
-  incoming: number,
-): { gap: boolean; missing: number } {
-  const expected = lastReceived + 1;
-  if (incoming > expected) {
-    return { gap: true, missing: incoming - expected };
-  }
-  return { gap: false, missing: 0 };
-}
-
-// Pattern 6: Mobile-aware timeout classification
-function classifyTimeout(timeoutMs: number): 'safe' | 'risky' {
-  return timeoutMs >= 10_000 ? 'safe' : 'risky';
-}
 
 describe('backoff with jitter (pattern 1)', () => {
   it('grows exponentially', () => {

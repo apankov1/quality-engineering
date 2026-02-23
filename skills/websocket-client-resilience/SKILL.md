@@ -25,6 +25,19 @@ Mobile WebSocket connections fail in ways that local development environments do
 
 ---
 
+## Included Utilities
+
+```typescript
+// WebSocket resilience pattern implementations (zero dependencies)
+import {
+  getBackoffDelay,
+  circuitBreakerTransition,
+  shouldDisconnect,
+  detectSequenceGap,
+  classifyTimeout,
+} from './resilience.ts';
+```
+
 ## Quick Reference
 
 | Pattern | Detect | Fix | Severity |

@@ -22,6 +22,13 @@ Detects breaking changes that could disrupt active sessions or lose client compa
 
 ---
 
+## Included Utilities
+
+```typescript
+// Breaking change classification (zero dependencies)
+import { classifyFieldChange, classifySerializedSchema } from './breaking-change.ts';
+```
+
 ## Backward Compatibility Checklist
 
 When modifying contracts or schemas:

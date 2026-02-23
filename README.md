@@ -15,6 +15,43 @@ These skills teach AI coding agents (Claude Code, Cursor, etc.) rigorous testing
 | **pairwise-test-coverage** | Combinatorial testing with matrix generator | Zero-dep greedy algorithm covers all factor pairs in near-minimal test cases |
 | **websocket-client-resilience** | Client-side WebSocket resilience patterns | Mobile-aware timeouts, circuit breakers, heartbeat hysteresis |
 
+## Quickstart for QA Reviewers
+
+Prove detection in under a minute. Clone the repo and run one command per skill:
+
+```bash
+git clone https://github.com/apankov1/quality-engineering.git
+cd quality-engineering
+
+# Pairwise coverage: generate a 3×3×3 matrix, then stress-test 8×4
+node --experimental-strip-types skills/pairwise-test-coverage/pairwise.ts
+
+# Barrier concurrency: 7 tests for deterministic race condition patterns
+node --experimental-strip-types --test skills/barrier-concurrency-testing/test-fixtures.spec.ts
+
+# Breaking change detector: 11 tests for field classification + schema validation
+node --experimental-strip-types --test skills/breaking-change-detector/breaking-change.spec.ts
+
+# WebSocket resilience: 21 tests for backoff, circuit breaker, heartbeat, gaps, timeouts
+node --experimental-strip-types --test skills/websocket-client-resilience/resilience.spec.ts
+```
+
+Each skill ships importable utilities alongside its tests. Import what you need:
+
+```typescript
+import { generatePairwiseMatrix } from './skills/pairwise-test-coverage/pairwise.ts';
+import { classifyFieldChange } from './skills/breaking-change-detector/breaking-change.ts';
+import { circuitBreakerTransition } from './skills/websocket-client-resilience/resilience.ts';
+import { createBarrier, createTrackedCleanup } from './skills/barrier-concurrency-testing/test-fixtures.ts';
+```
+
+**Node.js 18-20 (LTS)?** Replace `node --experimental-strip-types` with `npx tsx`:
+
+```bash
+npx tsx --test skills/barrier-concurrency-testing/test-fixtures.spec.ts
+npx tsx skills/pairwise-test-coverage/pairwise.ts
+```
+
 ## Install
 
 ```bash
@@ -41,6 +78,7 @@ Do not test race conditions with `setTimeout` and hope. This skill teaches agent
 
 Detects breaking changes across 6 categories that could disrupt active sessions or lose client compatibility. Uses the tolerant reader pattern for safe schema evolution.
 
+- **`breaking-change.ts`** -- Field change classifier and serialized schema validator
 - 6 detection categories: contracts, database schema, RPC/API, WebSocket protocol, serialized state, event sourcing
 - Backward compatibility checklist for schema/contract changes
 - Output format template: CRITICAL (disrupts sessions) / WARNING (migration required) / SAFE
@@ -60,7 +98,7 @@ Ships with real runnable code:
 
 6 resilience patterns for WebSocket clients, designed for real-world mobile network conditions where P99 latency is 5-8 seconds.
 
-- Backoff with jitter, circuit breaker, heartbeat hysteresis
+- **`resilience.ts`** -- Backoff calculator, circuit breaker state machine, heartbeat hysteresis, gap detector, timeout classifier
 - Command acknowledgment, sequence gap detection, mobile-aware timeouts
 - Before/after code examples for each pattern
 - Violation rules with severity levels (must-fail, should-fail, nice-to-have)
