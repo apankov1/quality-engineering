@@ -9,8 +9,8 @@ These skills teach AI coding agents (Claude Code, Cursor, etc.) rigorous testing
 | Skill | What It Does | Key Innovation |
 |-------|-------------|----------------|
 | **barrier-concurrency-testing** | Deterministic race condition testing via barriers | Replaces flaky setTimeout-based timing tests with reproducible interleaving |
-| **pairwise-test-coverage** | Combinatorial testing with matrix generator | Zero-dep pairwise algorithm covers all factor pairs in minimal test cases |
 | **breaking-change-detector** | 6-category breaking change analysis | Tolerant reader pattern for safe schema evolution |
+| **pairwise-test-coverage** | Combinatorial testing with matrix generator | Zero-dep pairwise algorithm covers all factor pairs in minimal test cases |
 | **websocket-client-resilience** | Client-side WebSocket resilience patterns | Mobile-aware timeouts, circuit breakers, heartbeat hysteresis |
 
 ## Install
@@ -35,6 +35,15 @@ Do not test race conditions with `setTimeout` and hope. This skill teaches agent
 - Decision guide: when to use barriers vs deferred
 - Violation rules: `inadequate_barrier_coverage`, `flaky_timing_test`
 
+### breaking-change-detector
+
+Detects breaking changes across 6 categories that could disrupt active sessions or lose client compatibility. Uses the tolerant reader pattern for safe schema evolution.
+
+- 6 detection categories: contracts, database schema, RPC/API, WebSocket protocol, serialized state, event sourcing
+- Backward compatibility checklist for schema/contract changes
+- Output format template: CRITICAL (disrupts sessions) / WARNING (migration required) / SAFE
+- Violation rules: `contract_field_removal`, `schema_without_catch`, `migration_drops_column`, + 3 more
+
 ### pairwise-test-coverage
 
 When your system has 4 factors with 3-4 values each, exhaustive testing means 100+ cases. Pairwise testing covers all pair interactions in ~12 cases.
@@ -44,15 +53,6 @@ Ships with real runnable code:
 - **`test-fixtures.ts`** -- Pairwise test case helpers (name generation, expected-value mapping)
 - Step-by-step workflow from factor identification to table-driven tests
 - 6 testing technique examples in references (pairwise matrices, property-based, model-based, fault injection, contract validation, observability assertions)
-
-### breaking-change-detector
-
-Detects breaking changes across 6 categories that could disrupt active sessions or lose client compatibility. Uses the tolerant reader pattern for safe schema evolution.
-
-- 6 detection categories: contracts, database schema, RPC/API, WebSocket protocol, serialized state, event sourcing
-- Backward compatibility checklist for schema/contract changes
-- Output format template: CRITICAL (disrupts sessions) / WARNING (migration required) / SAFE
-- Violation rules: `contract_field_removal`, `schema_without_catch`, `migration_drops_column`, + 3 more
 
 ### websocket-client-resilience
 
