@@ -63,6 +63,35 @@ Ships with real runnable code:
 - Before/after code examples for each pattern
 - Violation rules with severity levels (must-fail, should-fail, nice-to-have)
 
+## When to Apply
+
+Start with the change you're making. Each skill targets a different failure mode.
+
+| What Changed | Skill | Why |
+|---|---|---|
+| Shared types, API signatures, DB schema | breaking-change-detector | Catch incompatibilities before merge |
+| Code with concurrent access or shared state | barrier-concurrency-testing | Expose race windows deterministically |
+| 3+ interacting parameters (config, modes, states) | pairwise-test-coverage | Cover pair interactions without exhaustive explosion |
+| WebSocket client reconnection or health checks | websocket-client-resilience | Survive real mobile network conditions |
+
+## Defect Classes
+
+| Skill | Defects Caught | Example |
+|---|---|---|
+| barrier-concurrency-testing | Race conditions, write ordering bugs, stale reads | Flush conflict: two writers interleave, last-write-wins silently drops data |
+| breaking-change-detector | Backward-incompatible schema/API/protocol changes | Renamed field breaks active sessions still using old format |
+| pairwise-test-coverage | Interaction bugs in untested parameter combinations | Auth=expired + role=admin works, but auth=expired + role=guest crashes |
+| websocket-client-resilience | Reconnection storms, false disconnects, lost messages | All clients retry at once after outage (thundering herd) |
+
+## Workflow Integration
+
+```
+Design         → pairwise-test-coverage (define factor matrix for new feature)
+Implementation → barrier-concurrency-testing (test concurrent paths as you write them)
+Pre-merge      → breaking-change-detector (audit contract/schema diffs)
+Client deploy  → websocket-client-resilience (verify reconnection patterns)
+```
+
 ## Origin
 
 These skills grew out of solving real race conditions, breaking changes, and mobile network failures in a multiplayer platform on Cloudflare Workers. Generalized for any tech stack -- no framework dependencies.
