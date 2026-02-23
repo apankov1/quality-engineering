@@ -1,6 +1,6 @@
-# QA Skills for AI Coding Agents
+# Quality Engineering Skills for AI Coding Agents
 
-Production-proven QA methodologies refined through a real-time multiplayer platform. Deterministic concurrency testing, combinatorial coverage, breaking change detection, and client resilience patterns.
+Production-proven quality engineering methodologies refined through a real-time multiplayer platform. Deterministic concurrency testing, combinatorial coverage, breaking change detection, and client resilience patterns.
 
 These skills teach AI coding agents (Claude Code, Cursor, etc.) rigorous testing methodologies -- not just "write a test", but *how* to test concurrent code, *what* combinations to cover, and *which* invariants to assert.
 
@@ -17,10 +17,10 @@ These skills teach AI coding agents (Claude Code, Cursor, etc.) rigorous testing
 
 ```bash
 # Install a single skill
-npx skills add apankov1/qa-skills --skill barrier-concurrency-testing
+npx skills add apankov1/quality-engineering --skill barrier-concurrency-testing
 
 # Install another
-npx skills add apankov1/qa-skills --skill pairwise-test-coverage
+npx skills add apankov1/quality-engineering --skill pairwise-test-coverage
 ```
 
 ## What's Included
