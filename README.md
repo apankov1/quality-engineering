@@ -163,6 +163,20 @@ Use this template when documenting skill results. Each finding maps to a severit
 
 Each row traces from **violation** (what's wrong) → **file** (where) → **risk** (why it matters). Reviewers can triage by severity and verify each finding has a corresponding test using the fail-before/fix-after proof above.
 
+## Non-Functional Quality
+
+These skills cover correctness and compatibility, not performance benchmarking or load testing. But several non-functional concerns are addressed through existing patterns:
+
+| Concern | Covered By | How |
+|---|---|---|
+| **Fault tolerance** | pairwise-test-coverage [examples](skills/pairwise-test-coverage/references/examples.md) (section 4) | Inject storage/network failures, verify retry and dead-letter behavior |
+| **Observability** | pairwise-test-coverage [examples](skills/pairwise-test-coverage/references/examples.md) (section 6) | Assert structured log output on failure paths (fields, context, severity) |
+| **Resilience under degraded networks** | websocket-client-resilience | Circuit breakers, backoff with jitter, mobile-aware timeouts |
+| **State machine correctness** | pairwise-test-coverage [examples](skills/pairwise-test-coverage/references/examples.md) (section 3) | Model-based transition tables, verify illegal states are unreachable |
+| **Concurrency under contention** | barrier-concurrency-testing | Deterministic interleaving for write ordering and stale-read detection |
+
+**Not covered**: load/stress testing, latency percentile benchmarks, throughput profiling, SLO threshold validation, large-scale chaos engineering. These require runtime infrastructure (load generators, APM tooling, distributed tracing) that is outside the scope of static analysis skills.
+
 ## Origin
 
 These skills grew out of solving real race conditions, breaking changes, and mobile network failures in a multiplayer platform on Cloudflare Workers. Generalized for any tech stack -- no framework dependencies.
