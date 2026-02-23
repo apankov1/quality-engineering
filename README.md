@@ -42,7 +42,7 @@ Detects breaking changes across 6 categories that could disrupt active sessions 
 - 6 detection categories: contracts, database schema, RPC/API, WebSocket protocol, serialized state, event sourcing
 - Backward compatibility checklist for schema/contract changes
 - Output format template: CRITICAL (disrupts sessions) / WARNING (migration required) / SAFE
-- Violation rules: `contract_field_removal`, `schema_without_catch`, `migration_drops_column`, + 3 more
+- Violation rules: `contract_field_removal`, `schema_without_catch`, `strict_parse_in_deserialize`, `migration_drops_column`, `endpoint_removed`, `event_type_renamed`
 
 ### pairwise-test-coverage
 
