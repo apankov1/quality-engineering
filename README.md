@@ -9,7 +9,7 @@ These skills teach AI coding agents (Claude Code, Cursor, etc.) rigorous testing
 | Skill | What It Does | Key Innovation |
 |-------|-------------|----------------|
 | **barrier-concurrency-testing** | Deterministic race condition testing via barriers | Replaces flaky setTimeout-based timing tests with reproducible interleaving |
-| **pairwise-test-coverage** | Combinatorial testing with matrix generator | Zero-dep pairwise algorithm + 5 named invariant assertions + barrier fixtures |
+| **pairwise-test-coverage** | Combinatorial testing with matrix generator | Zero-dep pairwise algorithm covers all factor pairs in minimal test cases |
 | **breaking-change-detector** | 6-category breaking change analysis | Tolerant reader pattern for safe schema evolution |
 | **websocket-client-resilience** | Client-side WebSocket resilience patterns | Mobile-aware timeouts, circuit breakers, heartbeat hysteresis |
 
@@ -27,9 +27,10 @@ npx skills add apankov1/quality-engineering --skill pairwise-test-coverage
 
 ### barrier-concurrency-testing
 
-Testing race conditions with `setTimeout` and hope leads to flaky results. This skill teaches agents to use **barriers** -- deterministic interleave points that make concurrency tests reproducible on every run.
+Do not test race conditions with `setTimeout` and hope. This skill teaches agents to use **barriers** -- deterministic interleave points that make concurrency tests reproducible on every run.
 
 - Barrier interface + tracked cleanup pattern
+- 5 named invariant assertions for queue/sequence correctness
 - Deferred promise alternative for simple cases
 - Decision guide: when to use barriers vs deferred
 - Violation rules: `inadequate_barrier_coverage`, `flaky_timing_test`
@@ -40,15 +41,13 @@ When your system has 4 factors with 3-4 values each, exhaustive testing means 10
 
 Ships with real runnable code:
 - **`pairwise.ts`** -- Zero-dependency greedy covering algorithm (generates minimal test matrices)
-- **`test-fixtures.ts`** -- Barrier infrastructure + 5 named invariant assertions
+- **`test-fixtures.ts`** -- Pairwise test case helpers (name generation, expected-value mapping)
 - Step-by-step workflow from factor identification to table-driven tests
-- 7 testing technique examples in references (pairwise matrices, property-based, model-based, fault injection, barriers, contract validation, observability assertions)
+- 6 testing technique examples in references (pairwise matrices, property-based, model-based, fault injection, contract validation, observability assertions)
 
 ## Origin
 
 These skills grew out of solving real race conditions, breaking changes, and mobile network failures in a multiplayer platform on Cloudflare Workers. Generalized for any tech stack -- no framework dependencies.
-
-The barrier pattern alone caught 3 data-loss bugs by making race conditions reproducible in CI.
 
 ## Framework Compatibility
 

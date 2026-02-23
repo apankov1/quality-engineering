@@ -24,6 +24,23 @@ Instead of `setTimeout` (flaky) or `sleep` (slow), use **barriers** to pause exe
 
 ---
 
+## Included Utilities
+
+```typescript
+// Barrier infrastructure + invariant assertions + test data generators
+import {
+  createBarrier,
+  createTrackedBarrier,
+  releaseAllBarriers,
+  assertPreservesConcurrentItems,
+  assertPreservesOnFailure,
+  assertSequenceContinuity,
+  assertLastSequenceCorrect,
+  assertRetryCountReset,
+  createTestItems,
+} from './test-fixtures.ts';
+```
+
 ## Violation Rules
 
 ### inadequate_barrier_coverage

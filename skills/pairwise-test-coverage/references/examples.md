@@ -162,42 +162,7 @@ it('escalates to dead-letter after max retries', async () => {
 
 ---
 
-## 5. Deterministic Concurrency (Barrier)
-
-```typescript
-it('preserves new items queued after save, before clear', async () => {
-  const { storage, barriers } = createStorageWithBarriers();
-  const repository = {
-    saveBatch: async (items) => {
-      storage.signalSaveCompleted();
-      return items;
-    },
-  };
-  const processor = new QueueProcessor({ storage, repository, logger: console });
-
-  // Pre-populate queue
-  storage.setQueue({ pendingItems: items1to10, retryCount: 0 });
-  barriers.afterRead.release();
-
-  const flushPromise = processor.flush();
-
-  // Wait for save to complete
-  await pollUntil(() => repository.saveBatch.called);
-
-  // Concurrent enqueue while flush is blocked before clear
-  await processor.enqueue(items11to14);
-
-  barriers.transactionStart.release();
-  await flushPromise;
-
-  const queue = storage.getQueue();
-  expect(queue.pendingItems.map((e) => e.sequenceNumber)).toEqual([11, 12, 13, 14]);
-});
-```
-
----
-
-## 6. Contract Tests
+## 5. Contract Tests
 
 ```typescript
 import { describe, it, expect } from 'vitest';
@@ -226,7 +191,7 @@ describe('rollback message schema', () => {
 
 ---
 
-## 7. Observability Assertions
+## 6. Observability Assertions
 
 ```typescript
 it('logs error context on sequence gap', async () => {
