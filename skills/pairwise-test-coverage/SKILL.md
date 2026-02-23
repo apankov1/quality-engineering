@@ -1,35 +1,15 @@
 ---
 name: pairwise-test-coverage
-description: |
-  Combinatorial testing with a greedy pairwise matrix generator, barrier-based
-  concurrency fixtures, and named invariant assertions.
-
-  WHEN to use:
-  - Multi-factor systems where exhaustive testing is impractical
-  - State machines, retry/recovery logic, concurrent operations
-  - Configuration matrices, compatibility testing
-  - Any code with 3+ interacting parameters
-
-  WHEN NOT to use:
-  - Single-factor tests (just test each value)
-  - Two-factor systems (test all combinations directly)
-  - UI snapshot tests, type-only changes
-allowed-tools:
-  - Read
-  - Grep
-  - Glob
-  - Bash
-  - Write
-  - Edit
-references:
-  - ./references/workflow.md
-  - ./references/violations.md
-  - ./references/examples.md
+description: "Combinatorial testing with a greedy pairwise matrix generator, barrier-based concurrency fixtures, and named invariant assertions."
 ---
 
 # Pairwise Test Coverage
 
 Combinatorial testing that covers all factor pairs in minimal test cases, plus barrier-based concurrency testing and invariant assertion patterns.
+
+**When to use**: Multi-factor systems where exhaustive testing is impractical, state machines, retry/recovery logic, concurrent operations, configuration matrices, compatibility testing, any code with 3+ interacting parameters.
+
+**When not to use**: Single-factor tests (just test each value), two-factor systems (test all combinations directly), UI snapshot tests, type-only changes.
 
 ## Core Philosophy
 
