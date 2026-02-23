@@ -42,7 +42,7 @@ Ships with real runnable code:
 - **`pairwise.ts`** -- Zero-dependency greedy covering algorithm (generates minimal test matrices)
 - **`test-fixtures.ts`** -- Barrier infrastructure + 5 named invariant assertions
 - Step-by-step workflow from factor identification to table-driven tests
-- 7 concrete examples (pairwise, property-based, model-based, fault injection, barrier, contract, observability)
+- 7 testing technique examples in references (pairwise matrices, property-based, model-based, fault injection, barriers, contract validation, observability assertions)
 
 ## Origin
 
