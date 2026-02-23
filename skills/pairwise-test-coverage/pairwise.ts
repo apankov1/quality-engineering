@@ -225,7 +225,7 @@ export function formatAsTestCases(matrix: TestCase[], expectedField = 'expected'
     lines.push(`    name: 'Case ${index + 1}: ${name}',`);
 
     for (const [key, value] of Object.entries(testCase)) {
-      lines.push(`    ${key}: '${value}',`);
+      lines.push(`    ${key}: ${JSON.stringify(value)},`);
     }
 
     lines.push(`    ${expectedField}: { /* TODO: define expected outcome */ },`);
