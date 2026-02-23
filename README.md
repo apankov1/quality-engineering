@@ -1,5 +1,7 @@
 # Quality Engineering Skills for AI Coding Agents
 
+[![CI](https://github.com/apankov1/quality-engineering/actions/workflows/ci.yml/badge.svg)](https://github.com/apankov1/quality-engineering/actions/workflows/ci.yml)
+
 Quality engineering methodologies for AI coding agents. Deterministic concurrency testing, combinatorial coverage, breaking change detection, and client resilience patterns.
 
 These skills teach AI coding agents (Claude Code, Cursor, etc.) rigorous testing methodologies -- not just "write a test", but *how* to test concurrent code, *what* combinations to cover, and *which* invariants to assert.
@@ -71,7 +73,7 @@ Run the test suites and CLI demo with Node.js 22+ (no install needed):
 git clone https://github.com/apankov1/quality-engineering.git
 cd quality-engineering
 
-# Run all tests (17 tests across both skills)
+# Run all tests (19 tests across both skills)
 node --experimental-strip-types --test \
   skills/pairwise-test-coverage/pairwise.spec.ts \
   skills/barrier-concurrency-testing/test-fixtures.spec.ts
