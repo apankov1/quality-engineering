@@ -45,6 +45,24 @@ Ships with real runnable code:
 - Step-by-step workflow from factor identification to table-driven tests
 - 6 testing technique examples in references (pairwise matrices, property-based, model-based, fault injection, contract validation, observability assertions)
 
+### breaking-change-detector
+
+Detects breaking changes across 6 categories that could disrupt active sessions or lose client compatibility. Uses the tolerant reader pattern for safe schema evolution.
+
+- 6 detection categories: contracts, database schema, RPC/API, WebSocket protocol, serialized state, event sourcing
+- Backward compatibility checklist for schema/contract changes
+- Output format template: CRITICAL (disrupts sessions) / WARNING (migration required) / SAFE
+- Violation rules: `contract_field_removal`, `schema_without_catch`, `migration_drops_column`, + 3 more
+
+### websocket-client-resilience
+
+6 resilience patterns for WebSocket clients, designed for real-world mobile network conditions where P99 latency is 5-8 seconds.
+
+- Backoff with jitter, circuit breaker, heartbeat hysteresis
+- Command acknowledgment, sequence gap detection, mobile-aware timeouts
+- Before/after code examples for each pattern
+- Violation rules with severity levels (must-fail, should-fail, nice-to-have)
+
 ## Origin
 
 These skills grew out of solving real race conditions, breaking changes, and mobile network failures in a multiplayer platform on Cloudflare Workers. Generalized for any tech stack -- no framework dependencies.
