@@ -45,7 +45,7 @@ export interface Barrier {
  * Create a barrier for timing control
  */
 export function createBarrier(): Barrier {
-  let resolve: () => void;
+  let resolve!: () => void;
   let released = false;
 
   const promise = new Promise<void>((r) => {
