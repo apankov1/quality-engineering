@@ -274,4 +274,4 @@ All skills are framework-agnostic. The patterns work with:
 
 ## License
 
-[CC-BY-SA-4.0](LICENSE)
+[MIT](LICENSE)
