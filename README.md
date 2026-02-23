@@ -92,6 +92,77 @@ Pre-merge      → breaking-change-detector (audit contract/schema diffs)
 Client deploy  → websocket-client-resilience (verify reconnection patterns)
 ```
 
+## PR Review Checklist
+
+When reviewing a pull request, walk the diff and select skills based on what changed:
+
+1. **Scan the diff** -- `git diff --name-only base...HEAD`
+2. **Match files to skills**:
+   - Contract/schema/migration files → run **breaking-change-detector**
+   - Concurrent or stateful code → run **barrier-concurrency-testing**
+   - Multi-factor config or mode logic → run **pairwise-test-coverage**
+   - WebSocket client code → run **websocket-client-resilience**
+3. **Check for overlap** -- a single PR may trigger multiple skills (e.g., a schema migration that also adds concurrent flush logic)
+4. **Verify each finding has a test** -- every violation the skill flags should map to a test case in the PR (see Proving Defect Detection below)
+
+## Proving Defect Detection
+
+A test that only passes is not evidence. To prove a test catches the bug:
+
+1. **Write the test first** -- before any fix, write a test that exercises the defect
+2. **Confirm it fails** -- run the test and verify it fails for the expected reason (not a syntax error or import failure)
+3. **Apply the fix** -- make the minimal change to correct the behavior
+4. **Confirm it passes** -- the same test now passes, proving the fix addresses the defect
+5. **Document the proof** -- add a comment in the test referencing the failure:
+
+```typescript
+// Regression: before fix, barrier.wait() resolved immediately
+// because release() was called in constructor. See commit abc1234.
+it('blocks until explicitly released', async () => {
+  const barrier = createBarrier();
+  let resolved = false;
+  barrier.wait().then(() => { resolved = true; });
+  await new Promise(r => setTimeout(r, 10));
+  assert.equal(resolved, false); // Would have been true before fix
+  barrier.release();
+  await barrier.wait();
+  assert.equal(resolved, true);
+});
+```
+
+This is the `bug_detection_not_validated` rule from pairwise-test-coverage, applied as a cross-cutting practice.
+
+## Reporting Findings
+
+Use this template when documenting skill results. Each finding maps to a severity, the skill that detected it, and the risk it traces to.
+
+```markdown
+## Findings: PR #142
+
+### MUST-FIX
+
+| # | Skill | Violation | File | Risk |
+|---|-------|-----------|------|------|
+| 1 | breaking-change-detector | `contract_field_removal` | types.ts:42 | Active sessions fail on state load |
+| 2 | barrier-concurrency-testing | `inadequate_barrier_coverage` | flush.spec.ts | Race window untested: concurrent writes |
+
+### SHOULD-FIX
+
+| # | Skill | Violation | File | Risk |
+|---|-------|-----------|------|------|
+| 3 | websocket-client-resilience | heartbeat hysteresis | client.ts:88 | False disconnects on slow networks |
+
+### ADVISORY
+
+| # | Skill | Violation | File | Risk |
+|---|-------|-----------|------|------|
+| 4 | pairwise-test-coverage | `missing_pairwise_coverage` | retry.spec.ts | 3 factors × 4 values, only happy path tested |
+
+**Severity mapping**: must-fail → MUST-FIX, should-fail → SHOULD-FIX, nice-to-have → ADVISORY
+```
+
+Each row traces from **violation** (what's wrong) → **file** (where) → **risk** (why it matters). Reviewers can triage by severity and verify each finding has a corresponding test using the fail-before/fix-after proof above.
+
 ## Origin
 
 These skills grew out of solving real race conditions, breaking changes, and mobile network failures in a multiplayer platform on Cloudflare Workers. Generalized for any tech stack -- no framework dependencies.
