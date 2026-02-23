@@ -5,7 +5,7 @@ description: "Client-side WebSocket resilience patterns: backoff with jitter, ci
 
 # WebSocket Client Resilience
 
-6 resilience patterns for WebSocket clients, extracted from production mobile network conditions.
+6 resilience patterns for WebSocket clients, extracted from real-world mobile network conditions.
 
 Mobile WebSocket connections fail in ways that local development environments don't surface. P99 latency on 4G networks is 5-8 seconds. A 5-second health check timeout causes false positives on every slow network.
 

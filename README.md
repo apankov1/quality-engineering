@@ -1,6 +1,6 @@
 # Quality Engineering Skills for AI Coding Agents
 
-Production-proven quality engineering methodologies refined through a real-time multiplayer platform. Deterministic concurrency testing, combinatorial coverage, breaking change detection, and client resilience patterns.
+Quality engineering methodologies for AI coding agents. Deterministic concurrency testing, combinatorial coverage, breaking change detection, and client resilience patterns.
 
 These skills teach AI coding agents (Claude Code, Cursor, etc.) rigorous testing methodologies -- not just "write a test", but *how* to test concurrent code, *what* combinations to cover, and *which* invariants to assert.
 
@@ -46,9 +46,9 @@ Ships with real runnable code:
 
 ## Origin
 
-These skills encode deep lessons from race conditions, breaking changes, and mobile network failures in a production system running on Cloudflare Workers. They've been generalized for use with any tech stack -- no framework dependencies.
+These skills grew out of solving real race conditions, breaking changes, and mobile network failures in a multiplayer platform on Cloudflare Workers. Generalized for any tech stack -- no framework dependencies.
 
-The barrier pattern alone caught 3 data-loss bugs before they reached production by making race conditions reproducible in CI.
+The barrier pattern alone caught 3 data-loss bugs by making race conditions reproducible in CI.
 
 ## Framework Compatibility
 
