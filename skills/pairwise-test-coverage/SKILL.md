@@ -33,7 +33,7 @@ Combinatorial testing that covers all factor pairs in minimal test cases, plus b
 
 ## Core Philosophy
 
-**Exhaustive testing is a lie.** If your system has 4 factors with 3 values each, that's 81 test cases. Pairwise testing covers all pair interactions in ~12 cases -- a 85% reduction with near-complete defect detection.
+**Exhaustive testing doesn't scale.** If a system has 4 factors with 3 values each, that's 81 test cases. Pairwise testing covers all pair interactions in ~12 cases -- an 85% reduction with near-complete defect detection.
 
 **Test race conditions BEFORE fixing them.** Tests must catch bugs with current code, then validate the fix (TDD approach for concurrency).
 
@@ -41,7 +41,7 @@ Combinatorial testing that covers all factor pairs in minimal test cases, plus b
 
 | Rationalization | Why It's Wrong | Required Action |
 |-----------------|----------------|-----------------|
-| "We'll test the important combinations" | You'll miss the interaction between factors you didn't think of | Generate the pairwise matrix |
+| "We'll test the important combinations" | Unexpected factor interactions go untested without systematic coverage | Generate the pairwise matrix |
 | "81 test cases is fine" | 81 cases means 81 things to maintain and debug when they fail | Use pairwise to get 12 |
 | "The race condition is too hard to test" | If it's too hard to test, it's too hard to verify the fix works | Use barriers |
 | "The test passes, so the code works" | Test must FAIL before the fix to prove it catches the bug | Validate detection first |

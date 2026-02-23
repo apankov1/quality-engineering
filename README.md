@@ -27,7 +27,7 @@ npx skills add apankov1/quality-engineering --skill pairwise-test-coverage
 
 ### barrier-concurrency-testing
 
-Most teams test race conditions with `setTimeout` and hope. This skill teaches agents to use **barriers** -- deterministic interleave points that make concurrency tests reproducible on every run.
+Testing race conditions with `setTimeout` and hope leads to flaky results. This skill teaches agents to use **barriers** -- deterministic interleave points that make concurrency tests reproducible on every run.
 
 - Barrier interface + tracked cleanup pattern
 - Deferred promise alternative for simple cases

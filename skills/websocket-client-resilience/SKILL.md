@@ -28,7 +28,7 @@ allowed-tools:
 
 6 resilience patterns for WebSocket clients, extracted from production mobile network conditions.
 
-Mobile WebSocket connections fail in ways desktop testing never reveals. P99 latency on 4G networks is 5-8 seconds. A 5-second health check timeout causes false positives on every slow network.
+Mobile WebSocket connections fail in ways that local development environments don't surface. P99 latency on 4G networks is 5-8 seconds. A 5-second health check timeout causes false positives on every slow network.
 
 ## Rationalizations (Do Not Skip)
 
@@ -343,4 +343,4 @@ These patterns are framework-agnostic. They work with:
 - **React Native / Flutter**: Same patterns, different APIs
 - **Node.js**: `ws` library for server-to-server WebSocket clients
 
-The core principle: **network conditions are worse than your dev environment suggests. Design for real-world mobile latency, not localhost.**
+The core principle: **real-world network conditions are more variable than controlled environments. Design for mobile latency, not localhost.**
