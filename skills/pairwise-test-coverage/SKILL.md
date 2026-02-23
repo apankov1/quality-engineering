@@ -45,6 +45,18 @@ import { generatePairwiseMatrix, formatAsMarkdownTable } from './pairwise.ts';
 import { createPairwiseTestCases, generateTestCaseName } from './test-fixtures.ts';
 ```
 
+## Performance and Limits
+
+The greedy algorithm never enumerates the Cartesian product. Pair count grows as O(factors² × values²).
+
+| Factors | Values | Cartesian | Pairwise Cases | Time |
+|---------|--------|-----------|----------------|------|
+| 3 | 3 | 27 | ~10 | <1ms |
+| 8 | 4 | 65,536 | ~46 | ~2ms |
+| 8 | 8 | 16,777,216 | ~100 | ~10ms |
+
+**Hard limits** (throws if exceeded): max 20 factors, max 50 values per factor. Beyond these, pair count exceeds ~4.75M and in-memory generation becomes impractical.
+
 ## Violation Rules
 
 | Slug | Rule | Severity |

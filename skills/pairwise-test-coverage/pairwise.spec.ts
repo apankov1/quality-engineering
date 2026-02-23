@@ -55,6 +55,19 @@ describe('generatePairwiseMatrix', () => {
     assert.ok(matrix.length < 200, `Expected < 200 cases, got ${matrix.length}`);
   });
 
+  it('throws on too many factors', () => {
+    const factors: Record<string, string[]> = {};
+    for (let i = 0; i < 21; i++) {
+      factors[`f${i}`] = ['a', 'b'];
+    }
+    assert.throws(() => generatePairwiseMatrix(factors), /Too many factors/);
+  });
+
+  it('throws on too many values per factor', () => {
+    const values = Array.from({ length: 51 }, (_, i) => `v${i}`);
+    assert.throws(() => generatePairwiseMatrix({ f0: values, f1: ['a'] }), /too many values/i);
+  });
+
   it('every row has all factor keys', () => {
     const factors = { a: ['1', '2', '3'], b: ['x', 'y'], c: ['p', 'q', 'r'] };
     const matrix = generatePairwiseMatrix(factors);

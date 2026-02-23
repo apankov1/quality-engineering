@@ -63,6 +63,33 @@ Ships with real runnable code:
 - Before/after code examples for each pattern
 - Violation rules with severity levels (must-fail, should-fail, nice-to-have)
 
+## Try It
+
+Run the test suites and CLI demo with Node.js 22+ (no install needed):
+
+```bash
+git clone https://github.com/apankov1/quality-engineering.git
+cd quality-engineering
+
+# Run all tests (17 tests across both skills)
+node --experimental-strip-types --test \
+  skills/pairwise-test-coverage/pairwise.spec.ts \
+  skills/barrier-concurrency-testing/test-fixtures.spec.ts
+
+# Run the pairwise CLI demo (3×3×3 matrix + 8×4 stress test)
+node --experimental-strip-types skills/pairwise-test-coverage/pairwise.ts
+```
+
+**GitHub Actions snippet** for CI:
+
+```yaml
+- name: Quality engineering skill tests
+  run: |
+    node --experimental-strip-types --test \
+      skills/pairwise-test-coverage/pairwise.spec.ts \
+      skills/barrier-concurrency-testing/test-fixtures.spec.ts
+```
+
 ## When to Apply
 
 Start with the change you're making. Each skill targets a different failure mode.

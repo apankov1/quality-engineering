@@ -9,6 +9,10 @@
  * Complexity: O(result × factors × maxValues) per test case.
  * Handles 8 factors × 8 values (16M Cartesian product) in milliseconds.
  *
+ * Safety: Throws if factors exceed 20 or any factor has more than 50 values.
+ * The pair count grows as O(factors² × values²) — 20 factors × 50 values =
+ * ~4.75M pairs, which is the practical ceiling for in-memory generation.
+ *
  * @example
  * const factors = {
  *   browser: ['chrome', 'firefox', 'safari'],
@@ -167,6 +171,21 @@ function buildGreedyTestCase(
  */
 export function generatePairwiseMatrix(factors: FactorValues): TestCase[] {
   const factorNames = Object.keys(factors);
+
+  // Safety rails: prevent runaway generation on extreme inputs
+  if (factorNames.length > 20) {
+    throw new Error(
+      `Too many factors (${factorNames.length}). Maximum is 20. ` +
+      `Pair count grows as O(factors² × values²).`,
+    );
+  }
+  const maxValues = Math.max(0, ...factorNames.map((f) => factors[f].length));
+  if (maxValues > 50) {
+    throw new Error(
+      `Factor has too many values (${maxValues}). Maximum is 50. ` +
+      `Pair count grows as O(factors² × values²).`,
+    );
+  }
 
   // Edge cases
   if (factorNames.length === 0) {
