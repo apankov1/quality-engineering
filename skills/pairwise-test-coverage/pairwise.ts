@@ -1,7 +1,7 @@
 /**
  * Pairwise Test Matrix Generator
  *
- * Generates minimal test cases that cover all pairs of factor values.
+ * Generates near-minimal test cases that cover all pairs of factor values.
  * Uses an incremental greedy algorithm — never enumerates the Cartesian product.
  *
  * Zero dependencies. Works with any test framework.
@@ -152,7 +152,7 @@ function buildGreedyTestCase(
 }
 
 /**
- * Generate minimal pairwise test matrix using incremental greedy algorithm.
+ * Generate near-minimal pairwise test matrix using incremental greedy algorithm.
  *
  * The algorithm builds test cases one at a time, never enumerating the
  * Cartesian product:

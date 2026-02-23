@@ -1,11 +1,11 @@
 ---
 name: pairwise-test-coverage
-description: "Combinatorial testing with a greedy pairwise matrix generator. Covers all factor pairs in minimal test cases."
+description: "Combinatorial testing with a greedy pairwise matrix generator. Covers all factor pairs in near-minimal test cases."
 ---
 
 # Pairwise Test Coverage
 
-Combinatorial testing that covers all factor pairs in minimal test cases.
+Combinatorial testing that covers all factor pairs in near-minimal test cases.
 
 **When to use**: Multi-factor systems where exhaustive testing is impractical, state machines, retry/recovery logic, configuration matrices, compatibility testing, any code with 3+ interacting parameters.
 
