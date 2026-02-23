@@ -55,7 +55,7 @@ The greedy algorithm never enumerates the Cartesian product. Pair count grows as
 | 8 | 4 | 65,536 | ~46 | ~2ms |
 | 8 | 8 | 16,777,216 | ~100 | ~10ms |
 
-**Hard limits** (throws if exceeded): max 20 factors, max 50 values per factor. Beyond these, pair count exceeds ~4.75M and in-memory generation becomes impractical.
+**Hard limits** (throws if exceeded): max 20 factors, max 50 values per factor. Beyond these, pair count exceeds ~475K (C(20,2) × 50²) and in-memory generation becomes impractical.
 
 ## Violation Rules
 

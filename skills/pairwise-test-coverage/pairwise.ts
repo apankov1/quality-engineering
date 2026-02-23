@@ -11,7 +11,7 @@
  *
  * Safety: Throws if factors exceed 20 or any factor has more than 50 values.
  * The pair count grows as O(factors² × values²) — 20 factors × 50 values =
- * ~4.75M pairs, which is the practical ceiling for in-memory generation.
+ * ~475K pairs (C(20,2) × 50²), which is the practical ceiling for in-memory generation.
  *
  * @example
  * const factors = {

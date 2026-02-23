@@ -21,8 +21,10 @@ jobs:
         with:
           node-version: ${{ matrix.node-version }}
 
-      - name: Pairwise generator + barrier helpers (19 tests)
+      - name: All 4 skills (51 tests)
         run: |
           node --experimental-strip-types --test \
             skills/pairwise-test-coverage/pairwise.spec.ts \
-            skills/barrier-concurrency-testing/test-fixtures.spec.ts
+            skills/barrier-concurrency-testing/test-fixtures.spec.ts \
+            skills/breaking-change-detector/breaking-change.spec.ts \
+            skills/websocket-client-resilience/resilience.spec.ts

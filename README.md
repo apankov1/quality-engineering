@@ -73,13 +73,25 @@ Run the test suites and CLI demo with Node.js 22+ (no install needed):
 git clone https://github.com/apankov1/quality-engineering.git
 cd quality-engineering
 
-# Run all tests (19 tests across both skills)
+# Run all tests (51 tests across all 4 skills)
 node --experimental-strip-types --test \
   skills/pairwise-test-coverage/pairwise.spec.ts \
-  skills/barrier-concurrency-testing/test-fixtures.spec.ts
+  skills/barrier-concurrency-testing/test-fixtures.spec.ts \
+  skills/breaking-change-detector/breaking-change.spec.ts \
+  skills/websocket-client-resilience/resilience.spec.ts
 
 # Run the pairwise CLI demo (3×3×3 matrix + 8×4 stress test)
 node --experimental-strip-types skills/pairwise-test-coverage/pairwise.ts
+```
+
+**Node.js < 22?** Use `npx tsx` instead:
+
+```bash
+npx tsx --test \
+  skills/pairwise-test-coverage/pairwise.spec.ts \
+  skills/barrier-concurrency-testing/test-fixtures.spec.ts \
+  skills/breaking-change-detector/breaking-change.spec.ts \
+  skills/websocket-client-resilience/resilience.spec.ts
 ```
 
 **GitHub Actions snippet** for CI:
@@ -89,7 +101,9 @@ node --experimental-strip-types skills/pairwise-test-coverage/pairwise.ts
   run: |
     node --experimental-strip-types --test \
       skills/pairwise-test-coverage/pairwise.spec.ts \
-      skills/barrier-concurrency-testing/test-fixtures.spec.ts
+      skills/barrier-concurrency-testing/test-fixtures.spec.ts \
+      skills/breaking-change-detector/breaking-change.spec.ts \
+      skills/websocket-client-resilience/resilience.spec.ts
 ```
 
 ## When to Apply
