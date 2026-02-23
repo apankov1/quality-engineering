@@ -4,6 +4,7 @@ import {
   getBackoffDelay,
   circuitBreakerTransition,
   shouldDisconnect,
+  CommandAckTracker,
   detectSequenceGap,
   classifyTimeout,
 } from './resilience.ts';
@@ -101,6 +102,67 @@ describe('heartbeat hysteresis (pattern 3)', () => {
 
   it('does not disconnect on zero misses', () => {
     assert.equal(shouldDisconnect(0), false);
+  });
+});
+
+describe('command acknowledgment tracking (pattern 4)', () => {
+  // Defect: commands sent during network blip are silently lost.
+  // Before fix: ws.send() with no tracking — no way to detect unacknowledged commands.
+  // After fix: every command tracked by ID, timed out if no server ack.
+  it('tracks sent commands with unique IDs', () => {
+    const tracker = new CommandAckTracker();
+    const id1 = tracker.send('move', { x: 1 });
+    const id2 = tracker.send('move', { x: 2 });
+    assert.notEqual(id1, id2);
+    assert.equal(tracker.pendingCount, 2);
+  });
+
+  it('acknowledges known commands', () => {
+    const tracker = new CommandAckTracker();
+    const id = tracker.send('move', { x: 1 });
+    assert.equal(tracker.acknowledge(id), true);
+    assert.equal(tracker.pendingCount, 0);
+  });
+
+  it('rejects unknown commandId', () => {
+    const tracker = new CommandAckTracker();
+    assert.equal(tracker.acknowledge('cmd_unknown'), false);
+  });
+
+  it('identifies timed-out commands', () => {
+    let now = 1000;
+    const tracker = new CommandAckTracker(() => now);
+    tracker.send('move', { x: 1 });
+    tracker.send('move', { x: 2 });
+
+    // Advance clock past timeout
+    now = 31_000;
+    const timedOut = tracker.getTimedOut(30_000);
+    assert.equal(timedOut.length, 2);
+    assert.equal(timedOut[0].type, 'move');
+  });
+
+  it('does not return acknowledged commands as timed out', () => {
+    let now = 1000;
+    const tracker = new CommandAckTracker(() => now);
+    const id1 = tracker.send('move', { x: 1 });
+    tracker.send('move', { x: 2 });
+    tracker.acknowledge(id1);
+
+    now = 31_000;
+    const timedOut = tracker.getTimedOut(30_000);
+    assert.equal(timedOut.length, 1);
+  });
+
+  it('does not return recent commands as timed out', () => {
+    let now = 1000;
+    const tracker = new CommandAckTracker(() => now);
+    tracker.send('move', { x: 1 });
+
+    now = 5000; // Only 4 seconds elapsed
+    const timedOut = tracker.getTimedOut(30_000);
+    assert.equal(timedOut.length, 0);
+    assert.equal(tracker.pendingCount, 1);
   });
 });
 

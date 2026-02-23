@@ -4,6 +4,7 @@
  * Implements the detection logic from categories.md:
  * - Category 1: Contract field changes (add/remove/rename/widen/narrow)
  * - Category 5: Serialized state schema (.catch() default validation)
+ * - Category 6: Event sourcing schema (event type removal/rename detection)
  */
 
 // --- Types ---
@@ -23,6 +24,12 @@ export interface SchemaField {
 export interface SchemaResult {
   safe: boolean;
   violations: string[];
+}
+
+export interface EventTypeChangeResult {
+  removed: string[];
+  added: string[];
+  safe: boolean;
 }
 
 // --- Classification functions ---
@@ -66,4 +73,24 @@ export function classifySerializedSchema(fields: SchemaField[]): SchemaResult {
     }
   }
   return { safe: violations.length === 0, violations };
+}
+
+/**
+ * Compare two versions of an event type set and detect breaking changes.
+ *
+ * From categories.md Category 6:
+ * - Removing an event type breaks replay (old events can't be processed)
+ * - Renaming an event type is a removal + addition — breaking
+ * - Adding new event types is safe (new events, no replay impact)
+ * - Safe only when no types are removed
+ */
+export function classifyEventTypeChanges(
+  oldTypes: string[],
+  newTypes: string[],
+): EventTypeChangeResult {
+  const oldSet = new Set(oldTypes);
+  const newSet = new Set(newTypes);
+  const removed = oldTypes.filter((t) => !newSet.has(t));
+  const added = newTypes.filter((t) => !oldSet.has(t));
+  return { removed, added, safe: removed.length === 0 };
 }

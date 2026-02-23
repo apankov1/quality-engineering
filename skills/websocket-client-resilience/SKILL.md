@@ -33,6 +33,7 @@ import {
   getBackoffDelay,
   circuitBreakerTransition,
   shouldDisconnect,
+  CommandAckTracker,
   detectSequenceGap,
   classifyTimeout,
 } from './resilience.ts';
@@ -48,6 +49,19 @@ import {
 | No command ack | `ws.send()` without commandId tracking | Track pending commands, timeout at 30s | nice-to-have |
 | No sequence tracking | `onmessage` without sequence check | Track lastReceivedSequence, detect gaps | nice-to-have |
 | Short mobile timeout | Health timeout < 10s | Use 10s+ for all health checks | must-fail |
+
+## Coverage
+
+| Pattern | Utility | Status |
+|---------|---------|--------|
+| 1. Backoff with jitter | `getBackoffDelay()` | Code + tests |
+| 2. Circuit breaker | `circuitBreakerTransition()` | Code + tests |
+| 3. Heartbeat hysteresis | `shouldDisconnect()` | Code + tests |
+| 4. Command acknowledgment | `CommandAckTracker` | Code + tests |
+| 5. Sequence gap detection | `detectSequenceGap()` | Code + tests |
+| 6. Mobile-aware timeouts | `classifyTimeout()` | Code + tests |
+
+All 6 patterns have executable utilities and tests.
 
 ## Framework Adaptation
 

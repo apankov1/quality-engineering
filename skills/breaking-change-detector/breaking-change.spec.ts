@@ -1,6 +1,6 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
-import { classifyFieldChange, classifySerializedSchema } from './breaking-change.ts';
+import { classifyFieldChange, classifySerializedSchema, classifyEventTypeChanges } from './breaking-change.ts';
 
 /**
  * Tests for the breaking change classification utilities.
@@ -90,5 +90,66 @@ describe('serialized state schema (category 5)', () => {
     ]);
     assert.equal(result.safe, false);
     assert.equal(result.violations.length, 2);
+  });
+});
+
+describe('event type changes (category 6)', () => {
+  it('no changes is safe', () => {
+    const result = classifyEventTypeChanges(
+      ['USER_CREATED', 'ORDER_PLACED'],
+      ['USER_CREATED', 'ORDER_PLACED'],
+    );
+    assert.equal(result.safe, true);
+    assert.equal(result.removed.length, 0);
+    assert.equal(result.added.length, 0);
+  });
+
+  // Defect: adding new event types breaks nothing — old events still replay.
+  it('adding event types is safe', () => {
+    const result = classifyEventTypeChanges(
+      ['USER_CREATED'],
+      ['USER_CREATED', 'USER_DELETED'],
+    );
+    assert.equal(result.safe, true);
+    assert.equal(result.added.length, 1);
+    assert.ok(result.added.includes('USER_DELETED'));
+  });
+
+  // Defect: removing an event type breaks replay — old events have no handler.
+  // Before fix: no detection — removed type silently ignored during replay.
+  // After fix: removal detected, classified as breaking.
+  it('removing event type is breaking', () => {
+    const result = classifyEventTypeChanges(
+      ['USER_CREATED', 'ORDER_PLACED'],
+      ['USER_CREATED'],
+    );
+    assert.equal(result.safe, false);
+    assert.equal(result.removed.length, 1);
+    assert.ok(result.removed.includes('ORDER_PLACED'));
+  });
+
+  // Defect: renaming an event type = removal + addition. Both old and new appear.
+  // Before fix: rename looked "safe" because new type existed.
+  // After fix: old type in removed list — classified as breaking.
+  it('renaming event type is breaking (remove + add)', () => {
+    const result = classifyEventTypeChanges(
+      ['ORDER_PLACED'],
+      ['ORDER_CREATED'], // renamed
+    );
+    assert.equal(result.safe, false);
+    assert.equal(result.removed.length, 1);
+    assert.equal(result.added.length, 1);
+    assert.ok(result.removed.includes('ORDER_PLACED'));
+    assert.ok(result.added.includes('ORDER_CREATED'));
+  });
+
+  it('mixed: some added, some removed', () => {
+    const result = classifyEventTypeChanges(
+      ['A', 'B', 'C'],
+      ['B', 'D', 'E'],
+    );
+    assert.equal(result.safe, false);
+    assert.deepEqual(result.removed.sort(), ['A', 'C']);
+    assert.deepEqual(result.added.sort(), ['D', 'E']);
   });
 });

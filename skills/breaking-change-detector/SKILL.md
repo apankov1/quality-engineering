@@ -26,7 +26,7 @@ Detects breaking changes that could disrupt active sessions or lose client compa
 
 ```typescript
 // Breaking change classification (zero dependencies)
-import { classifyFieldChange, classifySerializedSchema } from './breaking-change.ts';
+import { classifyFieldChange, classifySerializedSchema, classifyEventTypeChanges } from './breaking-change.ts';
 ```
 
 ## Backward Compatibility Checklist
@@ -53,6 +53,19 @@ When modifying contracts or schemas:
 | `migration_drops_column` | Column removal without data migration | must-fail |
 | `endpoint_removed` | API endpoint removed without deprecation period | must-fail |
 | `event_type_renamed` | Event type name changed (incompatible with replay) | must-fail |
+
+## Coverage
+
+| Category | Utility | Status |
+|----------|---------|--------|
+| 1. Contract fields | `classifyFieldChange()` | Code + tests |
+| 2. Database schema | -- | Doc-only (requires SQL diffing) |
+| 3. RPC/API endpoints | -- | Doc-only (requires OpenAPI diffing) |
+| 4. WebSocket protocol | -- | Doc-only (requires message schema diffing) |
+| 5. Serialized state | `classifySerializedSchema()` | Code + tests |
+| 6. Event sourcing | `classifyEventTypeChanges()` | Code + tests |
+
+Categories 2-4 require static analysis of SQL migrations, OpenAPI specs, or protocol schemas -- tools beyond the scope of a pure-function utility. See [categories.md](./references/categories.md) for detection commands and safe patterns.
 
 ## Output Format
 

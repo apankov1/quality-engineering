@@ -29,10 +29,10 @@ node --experimental-strip-types skills/pairwise-test-coverage/pairwise.ts
 # Barrier concurrency: 7 tests for deterministic race condition patterns
 node --experimental-strip-types --test skills/barrier-concurrency-testing/test-fixtures.spec.ts
 
-# Breaking change detector: 11 tests for field classification + schema validation
+# Breaking change detector: 16 tests for field classification, schema validation, event type changes
 node --experimental-strip-types --test skills/breaking-change-detector/breaking-change.spec.ts
 
-# WebSocket resilience: 21 tests for backoff, circuit breaker, heartbeat, gaps, timeouts
+# WebSocket resilience: 27 tests for backoff, circuit breaker, heartbeat, command ack, gaps, timeouts
 node --experimental-strip-types --test skills/websocket-client-resilience/resilience.spec.ts
 ```
 
@@ -41,7 +41,7 @@ Each skill ships importable utilities alongside its tests. Import what you need:
 ```typescript
 import { generatePairwiseMatrix } from './skills/pairwise-test-coverage/pairwise.ts';
 import { classifyFieldChange } from './skills/breaking-change-detector/breaking-change.ts';
-import { circuitBreakerTransition } from './skills/websocket-client-resilience/resilience.ts';
+import { circuitBreakerTransition, CommandAckTracker } from './skills/websocket-client-resilience/resilience.ts';
 import { createBarrier, createTrackedCleanup } from './skills/barrier-concurrency-testing/test-fixtures.ts';
 ```
 
@@ -111,7 +111,7 @@ Run the test suites and CLI demo with Node.js 22+ (no install needed):
 git clone https://github.com/apankov1/quality-engineering.git
 cd quality-engineering
 
-# Run all tests (51 tests across all 4 skills)
+# Run all tests (62 tests across all 4 skills)
 node --experimental-strip-types --test \
   skills/pairwise-test-coverage/pairwise.spec.ts \
   skills/barrier-concurrency-testing/test-fixtures.spec.ts \

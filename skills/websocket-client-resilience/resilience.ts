@@ -5,7 +5,7 @@
  * 1. Backoff with jitter
  * 2. Circuit breaker state machine
  * 3. Heartbeat hysteresis
- * 4. Command acknowledgment (pattern only — no pure function)
+ * 4. Command acknowledgment tracking
  * 5. Sequence gap detection
  * 6. Mobile-aware timeout classification
  */
@@ -72,6 +72,70 @@ export function circuitBreakerTransition(
  */
 export function shouldDisconnect(missedHeartbeats: number, threshold = 2): boolean {
   return missedHeartbeats >= threshold;
+}
+
+// --- Pattern 4: Command acknowledgment tracking ---
+
+export interface PendingCommand {
+  commandId: string;
+  type: string;
+  data: unknown;
+  sentAt: number;
+}
+
+/**
+ * Tracks sent commands awaiting server acknowledgment.
+ *
+ * From patterns.md Pattern 4:
+ * - Every command sent to the server gets a unique ID
+ * - Server must acknowledge each command within a timeout
+ * - Unacknowledged commands can be retried or surfaced to the user
+ * - Prevents silent command loss during network blips
+ *
+ * @param nowFn - Injectable clock for deterministic testing (defaults to Date.now)
+ */
+export class CommandAckTracker {
+  private pending = new Map<string, PendingCommand>();
+  private counter = 0;
+  private nowFn: () => number;
+
+  constructor(nowFn: () => number = Date.now) {
+    this.nowFn = nowFn;
+  }
+
+  /** Track a new command. Returns the commandId. */
+  send(type: string, data: unknown): string {
+    const commandId = `cmd_${++this.counter}`;
+    this.pending.set(commandId, {
+      commandId,
+      type,
+      data,
+      sentAt: this.nowFn(),
+    });
+    return commandId;
+  }
+
+  /** Acknowledge a command by ID. Returns true if it was pending. */
+  acknowledge(commandId: string): boolean {
+    return this.pending.delete(commandId);
+  }
+
+  /** Get all commands that have exceeded the timeout. */
+  getTimedOut(timeoutMs: number): PendingCommand[] {
+    const now = this.nowFn();
+    const timedOut: PendingCommand[] = [];
+    for (const cmd of this.pending.values()) {
+      if (now - cmd.sentAt >= timeoutMs) {
+        timedOut.push(cmd);
+      }
+    }
+    return timedOut;
+  }
+
+  /** Number of commands still awaiting acknowledgment. */
+  get pendingCount(): number {
+    return this.pending.size;
+  }
 }
 
 // --- Pattern 5: Sequence gap detection ---
