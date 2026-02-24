@@ -84,11 +84,11 @@ export function createTrackedBarrier(): Barrier {
  * Prevents test hangs when barriers are not explicitly released.
  */
 export function releaseAllBarriers(): void {
-  activeBarriers.forEach((b) => {
+  for (const b of activeBarriers) {
     if (!b.released) {
       b.release();
     }
-  });
+  }
   activeBarriers.length = 0;
 }
 
@@ -132,7 +132,7 @@ export function assertPreservesConcurrentItems(
 
   expect(
     violations,
-    `INVARIANT 1 violated: ${violations.length} items with seq <= ${maxProcessedSequence} still in queue: [${violations.map((e) => e.sequenceNumber).join(', ')}]`,
+    `INVARIANT 1 violated: ${violations.length} items with seq <= ${maxProcessedSequence} still in queue: [${violations.map((e) => e.sequenceNumber).join(", ")}]`,
   ).toHaveLength(0);
 }
 
@@ -145,17 +145,14 @@ export function assertPreservesConcurrentItems(
 export function assertPreservesOnFailure(
   queueAfter: SequencedItem[],
   queueBefore: SequencedItem[],
-  newItems: SequencedItem[] = [],
+  newItems: SequencedItem[],
   expect: (value: unknown, message?: string) => { toContain: (item: unknown) => void },
 ): void {
   const expectedSequences = [...queueBefore, ...newItems].map((e) => e.sequenceNumber);
   const actualSequences = queueAfter.map((e) => e.sequenceNumber);
 
   for (const seq of expectedSequences) {
-    expect(
-      actualSequences,
-      `INVARIANT 2 violated: sequence ${seq} missing after failed processing`,
-    ).toContain(seq);
+    expect(actualSequences, `INVARIANT 2 violated: sequence ${seq} missing after failed processing`).toContain(seq);
   }
 }
 
@@ -175,9 +172,7 @@ export function assertSequenceContinuity(
   const seqs = remainingItems.map((e) => e.sequenceNumber).sort((a, b) => a - b);
 
   for (let i = 1; i < seqs.length; i++) {
-    expect(seqs[i], `INVARIANT 3 violated: gap between ${seqs[i - 1]} and ${seqs[i]}`).toBe(
-      seqs[i - 1] + 1,
-    );
+    expect(seqs[i], `INVARIANT 3 violated: gap between ${seqs[i - 1]} and ${seqs[i]}`).toBe(seqs[i - 1] + 1);
   }
 }
 
@@ -195,7 +190,7 @@ export function assertLastSequenceCorrect(
   if (processedItems.length === 0) {
     expect(
       returnedLastSequence,
-      'INVARIANT 4 violated: lastSequence should be undefined for empty batch',
+      "INVARIANT 4 violated: lastSequence should be undefined for empty batch",
     ).toBeUndefined();
     return;
   }
@@ -237,6 +232,6 @@ export function createTestItems(startSeq: number, count: number): SequencedItem[
   return Array.from({ length: count }, (_, i) => ({
     sequenceNumber: startSeq + i,
     id: `item-${startSeq + i}`,
-    data: { type: 'test', seq: startSeq + i },
+    data: { type: "test", seq: startSeq + i },
   }));
 }

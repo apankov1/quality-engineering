@@ -35,7 +35,7 @@ export interface PairwiseTestCase {
 export function generateTestCaseName(testCase: Record<string, string>): string {
   return Object.entries(testCase)
     .map(([k, v]) => `${k}=${v}`)
-    .join(', ');
+    .join(", ");
 }
 
 /**

@@ -28,6 +28,12 @@ jobs:
         with:
           node-version: ${{ matrix.node-version }}
 
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Lint
+        run: npm run lint
+
       - name: All 4 skills (63 tests) — native strip-types
         if: matrix.runner == 'native'
         run: |

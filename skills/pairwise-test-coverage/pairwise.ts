@@ -41,9 +41,9 @@ function pairKey(factorA: string, valueA: string, factorB: string, valueB: strin
  * Parse a pair key back into its components
  */
 function parsePairKey(key: string): [string, string, string, string] {
-  const [left, right] = key.split('|');
-  const [factorA, valueA] = left.split(':');
-  const [factorB, valueB] = right.split(':');
+  const [left, right] = key.split("|");
+  const [factorA, valueA] = left.split(":");
+  const [factorB, valueB] = right.split(":");
   return [factorA, valueA, factorB, valueB];
 }
 
@@ -96,11 +96,7 @@ function countNewPairsForValue(
 /**
  * Mark pairs as covered by this test case
  */
-function markPairsCovered(
-  testCase: TestCase,
-  uncoveredPairs: Set<string>,
-  factorNames: string[],
-): void {
+function markPairsCovered(testCase: TestCase, uncoveredPairs: Set<string>, factorNames: string[]): void {
   for (let i = 0; i < factorNames.length; i++) {
     for (let j = i + 1; j < factorNames.length; j++) {
       const factorA = factorNames[i];
@@ -121,16 +117,12 @@ function markPairsCovered(
  * Seeding from an uncovered pair guarantees at least 1 new pair per row,
  * so the algorithm always terminates.
  */
-function buildGreedyTestCase(
-  factors: FactorValues,
-  factorNames: string[],
-  uncoveredPairs: Set<string>,
-): TestCase {
+function buildGreedyTestCase(factors: FactorValues, factorNames: string[], uncoveredPairs: Set<string>): TestCase {
   const testCase: TestCase = {};
 
   // Seed from an uncovered pair
   const firstUncoveredResult = uncoveredPairs.values().next();
-  if (!firstUncoveredResult.value) throw new Error('No uncovered pairs available');
+  if (!firstUncoveredResult.value) throw new Error("No uncovered pairs available");
   const [factorA, valueA, factorB, valueB] = parsePairKey(firstUncoveredResult.value);
   testCase[factorA] = valueA;
   testCase[factorB] = valueB;
@@ -176,15 +168,13 @@ export function generatePairwiseMatrix(factors: FactorValues): TestCase[] {
   // Safety rails: prevent runaway generation on extreme inputs
   if (factorNames.length > 20) {
     throw new Error(
-      `Too many factors (${factorNames.length}). Maximum is 20. ` +
-      `Pair count grows as O(factors² × values²).`,
+      `Too many factors (${factorNames.length}). Maximum is 20. Pair count grows as O(factors² × values²).`,
     );
   }
   const maxValues = Math.max(0, ...factorNames.map((f) => factors[f].length));
   if (maxValues > 50) {
     throw new Error(
-      `Factor has too many values (${maxValues}). Maximum is 50. ` +
-      `Pair count grows as O(factors² × values²).`,
+      `Factor has too many values (${maxValues}). Maximum is 50. Pair count grows as O(factors² × values²).`,
     );
   }
 
@@ -194,9 +184,7 @@ export function generatePairwiseMatrix(factors: FactorValues): TestCase[] {
   }
   for (const name of factorNames) {
     if (factors[name].length === 0) {
-      throw new Error(
-        `Factor "${name}" has no values. Every factor must have at least one value.`,
-      );
+      throw new Error(`Factor "${name}" has no values. Every factor must have at least one value.`);
     }
   }
   if (factorNames.length === 1) {
@@ -220,35 +208,35 @@ export function generatePairwiseMatrix(factors: FactorValues): TestCase[] {
  */
 export function formatAsMarkdownTable(matrix: TestCase[]): string {
   if (matrix.length === 0) {
-    return 'No test cases generated';
+    return "No test cases generated";
   }
 
   const headers = Object.keys(matrix[0]);
   const lines: string[] = [];
 
-  lines.push(`| # | ${headers.join(' | ')} |`);
-  lines.push(`|---| ${headers.map(() => '---').join(' | ')} |`);
+  lines.push(`| # | ${headers.join(" | ")} |`);
+  lines.push(`|---| ${headers.map(() => "---").join(" | ")} |`);
 
   matrix.forEach((testCase, index) => {
     const values = headers.map((h) => testCase[h]);
-    lines.push(`| ${index + 1} | ${values.join(' | ')} |`);
+    lines.push(`| ${index + 1} | ${values.join(" | ")} |`);
   });
 
-  return lines.join('\n');
+  return lines.join("\n");
 }
 
 /**
  * Format test matrix as TypeScript test cases for it.each
  */
-export function formatAsTestCases(matrix: TestCase[], expectedField = 'expected'): string {
-  const lines: string[] = ['const testCases = ['];
+export function formatAsTestCases(matrix: TestCase[], expectedField = "expected"): string {
+  const lines: string[] = ["const testCases = ["];
 
   matrix.forEach((testCase, index) => {
     const name = Object.entries(testCase)
       .map(([k, v]) => `${k}=${v}`)
-      .join(', ');
+      .join(", ");
 
-    lines.push(`  {`);
+    lines.push("  {");
     lines.push(`    name: 'Case ${index + 1}: ${name}',`);
 
     for (const [key, value] of Object.entries(testCase)) {
@@ -256,12 +244,12 @@ export function formatAsTestCases(matrix: TestCase[], expectedField = 'expected'
     }
 
     lines.push(`    ${expectedField}: { /* TODO: define expected outcome */ },`);
-    lines.push(`  },`);
+    lines.push("  },");
   });
 
-  lines.push('];');
+  lines.push("];");
 
-  return lines.join('\n');
+  return lines.join("\n");
 }
 
 /**
@@ -305,17 +293,17 @@ export function validateCoverage(
 }
 
 // CLI usage
-if (typeof process !== 'undefined' && process.argv?.[1]?.includes('pairwise')) {
+if (typeof process !== "undefined" && process.argv?.[1]?.includes("pairwise")) {
   const compatibilityFactors = {
-    browser: ['chrome', 'firefox', 'safari'],
-    os: ['windows', 'macos', 'linux'],
-    viewport: ['mobile', 'tablet', 'desktop'],
+    browser: ["chrome", "firefox", "safari"],
+    os: ["windows", "macos", "linux"],
+    viewport: ["mobile", "tablet", "desktop"],
   };
 
-  console.log('=== Browser Compatibility Pairwise Matrix ===\n');
+  console.log("=== Browser Compatibility Pairwise Matrix ===\n");
   const matrix = generatePairwiseMatrix(compatibilityFactors);
   console.log(formatAsMarkdownTable(matrix));
-  console.log('\n');
+  console.log("\n");
 
   const validation = validateCoverage(compatibilityFactors, matrix);
   console.log(`Coverage: ${validation.coverage.toFixed(1)}%`);
@@ -323,19 +311,19 @@ if (typeof process !== 'undefined' && process.argv?.[1]?.includes('pairwise')) {
   console.log(`Valid: ${validation.valid}`);
 
   if (!validation.valid) {
-    console.log('Missing pairs:', validation.missing);
+    console.log("Missing pairs:", validation.missing);
   }
 
-  console.log('\n=== Stress Test: 8 factors × 4 values ===\n');
+  console.log("\n=== Stress Test: 8 factors × 4 values ===\n");
   const stressFactors: FactorValues = {};
   for (let i = 0; i < 8; i++) {
-    stressFactors[`f${i}`] = ['a', 'b', 'c', 'd'];
+    stressFactors[`f${i}`] = ["a", "b", "c", "d"];
   }
   const t0 = performance.now();
   const stressMatrix = generatePairwiseMatrix(stressFactors);
   const elapsed = performance.now() - t0;
   const stressValidation = validateCoverage(stressFactors, stressMatrix);
-  console.log(`${stressMatrix.length} test cases (vs ${Math.pow(4, 8)} exhaustive)`);
+  console.log(`${stressMatrix.length} test cases (vs ${4 ** 8} exhaustive)`);
   console.log(`Coverage: ${stressValidation.coverage.toFixed(1)}%`);
   console.log(`Valid: ${stressValidation.valid}`);
   console.log(`Time: ${elapsed.toFixed(1)}ms`);

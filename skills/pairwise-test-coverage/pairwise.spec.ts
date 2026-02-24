@@ -1,37 +1,32 @@
-import { describe, it } from 'node:test';
-import assert from 'node:assert/strict';
-import {
-  generatePairwiseMatrix,
-  validateCoverage,
-  formatAsMarkdownTable,
-  formatAsTestCases,
-} from './pairwise.ts';
+import assert from "node:assert/strict";
+import { describe, it } from "node:test";
+import { formatAsMarkdownTable, formatAsTestCases, generatePairwiseMatrix, validateCoverage } from "./pairwise.ts";
 
-describe('generatePairwiseMatrix', () => {
-  it('returns empty array for no factors', () => {
+describe("generatePairwiseMatrix", () => {
+  it("returns empty array for no factors", () => {
     assert.deepStrictEqual(generatePairwiseMatrix({}), []);
   });
 
-  it('returns one row per value for single factor', () => {
-    const matrix = generatePairwiseMatrix({ color: ['red', 'green', 'blue'] });
+  it("returns one row per value for single factor", () => {
+    const matrix = generatePairwiseMatrix({ color: ["red", "green", "blue"] });
     assert.equal(matrix.length, 3);
     const values = matrix.map((r) => r.color).sort();
-    assert.deepStrictEqual(values, ['blue', 'green', 'red']);
+    assert.deepStrictEqual(values, ["blue", "green", "red"]);
   });
 
-  it('covers all pairs for 2 factors', () => {
-    const factors = { a: ['1', '2'], b: ['x', 'y'] };
+  it("covers all pairs for 2 factors", () => {
+    const factors = { a: ["1", "2"], b: ["x", "y"] };
     const matrix = generatePairwiseMatrix(factors);
     const validation = validateCoverage(factors, matrix);
     assert.equal(validation.valid, true);
     assert.equal(validation.coverage, 100);
   });
 
-  it('covers all pairs for 3x3x3', () => {
+  it("covers all pairs for 3x3x3", () => {
     const factors = {
-      browser: ['chrome', 'firefox', 'safari'],
-      os: ['windows', 'macos', 'linux'],
-      viewport: ['mobile', 'tablet', 'desktop'],
+      browser: ["chrome", "firefox", "safari"],
+      os: ["windows", "macos", "linux"],
+      viewport: ["mobile", "tablet", "desktop"],
     };
     const matrix = generatePairwiseMatrix(factors);
     const validation = validateCoverage(factors, matrix);
@@ -40,10 +35,10 @@ describe('generatePairwiseMatrix', () => {
     assert.ok(matrix.length < 27, `Expected < 27 cases, got ${matrix.length}`);
   });
 
-  it('handles 8x4 without hanging or OOM', () => {
+  it("handles 8x4 without hanging or OOM", () => {
     const factors: Record<string, string[]> = {};
     for (let i = 0; i < 8; i++) {
-      factors[`f${i}`] = ['a', 'b', 'c', 'd'];
+      factors[`f${i}`] = ["a", "b", "c", "d"];
     }
     const t0 = performance.now();
     const matrix = generatePairwiseMatrix(factors);
@@ -55,42 +50,39 @@ describe('generatePairwiseMatrix', () => {
     assert.ok(matrix.length < 200, `Expected < 200 cases, got ${matrix.length}`);
   });
 
-  it('throws on too many factors', () => {
+  it("throws on too many factors", () => {
     const factors: Record<string, string[]> = {};
     for (let i = 0; i < 21; i++) {
-      factors[`f${i}`] = ['a', 'b'];
+      factors[`f${i}`] = ["a", "b"];
     }
     assert.throws(() => generatePairwiseMatrix(factors), /Too many factors/);
   });
 
-  it('throws on too many values per factor', () => {
+  it("throws on too many values per factor", () => {
     const values = Array.from({ length: 51 }, (_, i) => `v${i}`);
-    assert.throws(() => generatePairwiseMatrix({ f0: values, f1: ['a'] }), /too many values/i);
+    assert.throws(() => generatePairwiseMatrix({ f0: values, f1: ["a"] }), /too many values/i);
   });
 
   // Defect: empty values array causes factors[factor][0] to be undefined.
   // Before fix: bestValue silently became undefined, producing invalid test cases.
   // After fix: throws early with a clear message identifying the empty factor.
-  it('throws on empty values array', () => {
-    assert.throws(
-      () => generatePairwiseMatrix({ browser: ['chrome'], os: [] }),
-      /Factor "os" has no values/,
-    );
+  it("throws on empty values array", () => {
+    assert.throws(() => generatePairwiseMatrix({ browser: ["chrome"], os: [] }), /Factor "os" has no values/);
   });
 
-  it('every row has all factor keys', () => {
-    const factors = { a: ['1', '2', '3'], b: ['x', 'y'], c: ['p', 'q', 'r'] };
+  it("every row has all factor keys", () => {
+    const factors = { a: ["1", "2", "3"], b: ["x", "y"], c: ["p", "q", "r"] };
     const matrix = generatePairwiseMatrix(factors);
     for (const row of matrix) {
-      assert.deepStrictEqual(Object.keys(row).sort(), ['a', 'b', 'c']);
+      assert.deepStrictEqual(Object.keys(row).sort(), ["a", "b", "c"]);
     }
   });
 });
 
-describe('validateCoverage', () => {
-  it('detects missing pairs', () => {
-    const factors = { a: ['1', '2'], b: ['x', 'y'] };
-    const partial = [{ a: '1', b: 'x' }];
+describe("validateCoverage", () => {
+  it("detects missing pairs", () => {
+    const factors = { a: ["1", "2"], b: ["x", "y"] };
+    const partial = [{ a: "1", b: "x" }];
     const validation = validateCoverage(factors, partial);
     assert.equal(validation.valid, false);
     assert.ok(validation.missing.length > 0);
@@ -98,22 +90,22 @@ describe('validateCoverage', () => {
   });
 });
 
-describe('formatAsMarkdownTable', () => {
-  it('returns message for empty matrix', () => {
-    assert.equal(formatAsMarkdownTable([]), 'No test cases generated');
+describe("formatAsMarkdownTable", () => {
+  it("returns message for empty matrix", () => {
+    assert.equal(formatAsMarkdownTable([]), "No test cases generated");
   });
 
-  it('produces valid markdown table', () => {
-    const matrix = [{ a: '1', b: 'x' }];
+  it("produces valid markdown table", () => {
+    const matrix = [{ a: "1", b: "x" }];
     const table = formatAsMarkdownTable(matrix);
-    assert.ok(table.includes('| # | a | b |'));
-    assert.ok(table.includes('| 1 | 1 | x |'));
+    assert.ok(table.includes("| # | a | b |"));
+    assert.ok(table.includes("| 1 | 1 | x |"));
   });
 });
 
-describe('formatAsTestCases', () => {
-  it('uses JSON.stringify for safe escaping', () => {
-    const matrix = [{ key: "it's a \"test\"" }];
+describe("formatAsTestCases", () => {
+  it("uses JSON.stringify for safe escaping", () => {
+    const matrix = [{ key: 'it\'s a "test"' }];
     const output = formatAsTestCases(matrix);
     assert.ok(output.includes('key: "it\'s a \\"test\\""'), `Got: ${output}`);
   });

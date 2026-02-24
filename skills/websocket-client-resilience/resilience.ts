@@ -12,7 +12,7 @@
 
 // --- Types ---
 
-export type CircuitState = 'closed' | 'open' | 'half-open';
+export type CircuitState = "closed" | "open" | "half-open";
 
 export interface SequenceGapResult {
   gap: boolean;
@@ -31,7 +31,7 @@ export interface SequenceGapResult {
  * - Never returns negative
  */
 export function getBackoffDelay(attempt: number, baseMs = 1000, maxMs = 30000): number {
-  const exponential = Math.min(baseMs * Math.pow(2, attempt), maxMs);
+  const exponential = Math.min(baseMs * 2 ** attempt, maxMs);
   const jitter = exponential * 0.25 * (Math.random() * 2 - 1);
   return Math.max(0, exponential + jitter);
 }
@@ -53,10 +53,10 @@ export function circuitBreakerTransition(
   maxFailures: number,
   cooldownExpired: boolean,
 ): CircuitState {
-  if (state === 'closed' && consecutiveFailures >= maxFailures) return 'open';
-  if (state === 'open' && cooldownExpired) return 'half-open';
-  if (state === 'half-open' && consecutiveFailures === 0) return 'closed';
-  if (state === 'half-open' && consecutiveFailures > 0) return 'open';
+  if (state === "closed" && consecutiveFailures >= maxFailures) return "open";
+  if (state === "open" && cooldownExpired) return "half-open";
+  if (state === "half-open" && consecutiveFailures === 0) return "closed";
+  if (state === "half-open" && consecutiveFailures > 0) return "open";
   return state;
 }
 
@@ -148,10 +148,7 @@ export class CommandAckTracker {
  * - Returns gap=true and count of missing messages if incoming > expected
  * - Used to trigger state resync when messages are lost
  */
-export function detectSequenceGap(
-  lastReceived: number,
-  incoming: number,
-): SequenceGapResult {
+export function detectSequenceGap(lastReceived: number, incoming: number): SequenceGapResult {
   const expected = lastReceived + 1;
   if (incoming > expected) {
     return { gap: true, missing: incoming - expected };
@@ -169,6 +166,6 @@ export function detectSequenceGap(
  * - Timeouts under 10 seconds risk false disconnects on mobile
  * - 10+ seconds accommodates real-world network conditions
  */
-export function classifyTimeout(timeoutMs: number): 'safe' | 'risky' {
-  return timeoutMs >= 10_000 ? 'safe' : 'risky';
+export function classifyTimeout(timeoutMs: number): "safe" | "risky" {
+  return timeoutMs >= 10_000 ? "safe" : "risky";
 }

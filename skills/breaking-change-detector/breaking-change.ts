@@ -9,10 +9,10 @@
 
 // --- Types ---
 
-export type ChangeKind = 'breaking' | 'safe';
+export type ChangeKind = "breaking" | "safe";
 
 export interface FieldChange {
-  action: 'add' | 'remove' | 'rename' | 'widen' | 'narrow' | 'make_optional' | 'make_required';
+  action: "add" | "remove" | "rename" | "widen" | "narrow" | "make_optional" | "make_required";
   optional?: boolean;
 }
 
@@ -45,16 +45,16 @@ export interface EventTypeChangeResult {
  */
 export function classifyFieldChange(change: FieldChange): ChangeKind {
   switch (change.action) {
-    case 'add':
-      return change.optional ? 'safe' : 'breaking';
-    case 'remove':
-    case 'rename':
-    case 'narrow':
-    case 'make_required':
-      return 'breaking';
-    case 'widen':
-    case 'make_optional':
-      return 'safe';
+    case "add":
+      return change.optional ? "safe" : "breaking";
+    case "remove":
+    case "rename":
+    case "narrow":
+    case "make_required":
+      return "breaking";
+    case "widen":
+    case "make_optional":
+      return "safe";
   }
 }
 
@@ -84,10 +84,7 @@ export function classifySerializedSchema(fields: SchemaField[]): SchemaResult {
  * - Adding new event types is safe (new events, no replay impact)
  * - Safe only when no types are removed
  */
-export function classifyEventTypeChanges(
-  oldTypes: string[],
-  newTypes: string[],
-): EventTypeChangeResult {
+export function classifyEventTypeChanges(oldTypes: string[], newTypes: string[]): EventTypeChangeResult {
   const oldSet = new Set(oldTypes);
   const newSet = new Set(newTypes);
   const removed = oldTypes.filter((t) => !newSet.has(t));
