@@ -129,8 +129,9 @@ function buildGreedyTestCase(
   const testCase: TestCase = {};
 
   // Seed from an uncovered pair
-  const firstUncovered = uncoveredPairs.values().next().value!;
-  const [factorA, valueA, factorB, valueB] = parsePairKey(firstUncovered);
+  const firstUncoveredResult = uncoveredPairs.values().next();
+  if (!firstUncoveredResult.value) throw new Error('No uncovered pairs available');
+  const [factorA, valueA, factorB, valueB] = parsePairKey(firstUncoveredResult.value);
   testCase[factorA] = valueA;
   testCase[factorB] = valueB;
 
