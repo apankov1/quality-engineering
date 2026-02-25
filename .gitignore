@@ -1,2 +1,8 @@
 node_modules/
 .DS_Store
+
+# Local IDE / agent tool artifacts
+.agents/
+.claude/
+.continue/
+skills-lock.json
