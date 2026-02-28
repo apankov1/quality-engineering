@@ -217,7 +217,7 @@ export class RetryPolicy {
    * Check if retry should be attempted.
    */
   shouldRetry(attempt: number): boolean {
-    return attempt < this.config.maxRetries;
+    return attempt >= 0 && attempt < this.config.maxRetries;
   }
 
   /**
@@ -241,7 +241,7 @@ export class RetryPolicy {
  *
  * The faultMap defines which fault names trigger which errors.
  * Call the returned function with a fault name to trigger that error,
- * or with null/undefined to execute the original function.
+ * or with null to execute the original function.
  */
 export function createFaultInjector<T, A extends unknown[]>(
   original: (...args: A) => T | Promise<T>,
@@ -279,8 +279,15 @@ export function assertQueuePreserved(
   queueBefore: QueueItem[],
   queueAfter: QueueItem[],
 ): { preserved: boolean; missing: number[]; extra: number[] } {
-  const beforeSeqs = new Set(queueBefore.map((i) => i.sequenceNumber));
-  const afterSeqs = new Set(queueAfter.map((i) => i.sequenceNumber));
+  const beforeSeqList = queueBefore.map((i) => i.sequenceNumber);
+  const afterSeqList = queueAfter.map((i) => i.sequenceNumber);
+  const beforeSeqs = new Set(beforeSeqList);
+  const afterSeqs = new Set(afterSeqList);
+
+  // Detect duplicate sequence numbers (Set would silently collapse them)
+  if (beforeSeqList.length !== beforeSeqs.size || afterSeqList.length !== afterSeqs.size) {
+    throw new Error("Queue contains duplicate sequence numbers — sequences must be unique");
+  }
 
   const missing: number[] = [];
   const extra: number[] = [];

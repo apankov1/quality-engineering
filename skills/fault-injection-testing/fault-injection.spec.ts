@@ -199,6 +199,12 @@ describe("RetryPolicy", () => {
       assert.equal(policy.shouldRetry(2), true);
       assert.equal(policy.shouldRetry(3), false);
     });
+
+    // Defect: Negative attempts must return false (consistent with getDelay guards)
+    it("returns false for negative attempts", () => {
+      const policy = new RetryPolicy({ maxRetries: 3, baseDelay: 100 });
+      assert.equal(policy.shouldRetry(-1), false);
+    });
   });
 
   describe("getAllDelays", () => {
@@ -246,6 +252,25 @@ describe("createFaultInjector", () => {
     const result = injector("unknown");
     assert.equal(result, "success");
   });
+
+  // Defect: Async original must still work when no fault injected
+  it("preserves async behavior when no fault", async () => {
+    const original = async (x: number) => x * 2;
+    const injector = createFaultInjector(original, { timeout: new Error("Timeout") });
+
+    const result = await injector(null, 5);
+    assert.equal(result, 10);
+  });
+
+  // Defect: Sync throw for async-wrapped functions is intentional —
+  // fault injection simulates boundary failures at the call site,
+  // not inside the async pipeline
+  it("throws synchronously even for async originals", () => {
+    const original = async () => "success";
+    const injector = createFaultInjector(original, { timeout: new Error("ETIMEDOUT") });
+
+    assert.throws(() => injector("timeout"), /ETIMEDOUT/);
+  });
 });
 
 // ============================================================================
@@ -269,6 +294,14 @@ describe("assertQueuePreserved", () => {
     const after = [{ sequenceNumber: 1 }, { sequenceNumber: 3 }]; // 2 missing
 
     assert.throws(() => assertQueuePreserved(before, after), /missing sequences \[2\]/);
+  });
+
+  // Defect: Duplicate sequence numbers must be detected (not silently collapsed)
+  it("throws on duplicate sequence numbers", () => {
+    const before = [{ sequenceNumber: 1 }, { sequenceNumber: 1 }, { sequenceNumber: 2 }];
+    const after = [{ sequenceNumber: 1 }, { sequenceNumber: 2 }];
+
+    assert.throws(() => assertQueuePreserved(before, after), /duplicate sequence numbers/);
   });
 
   // Defect: Must allow extra items (concurrent additions)
