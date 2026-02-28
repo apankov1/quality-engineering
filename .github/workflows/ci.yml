@@ -34,10 +34,10 @@ jobs:
       - name: Lint
         run: npm run lint
 
-      - name: All 8 skills (174 tests) — native strip-types
+      - name: All skills — native strip-types
         if: matrix.runner == 'native'
         run: node --experimental-strip-types --test skills/*/*.spec.ts
 
-      - name: All 8 skills (174 tests) — npx tsx
+      - name: All skills — npx tsx
         if: matrix.runner == 'tsx'
         run: npx tsx --test skills/*/*.spec.ts

@@ -31,7 +31,7 @@ Prove detection in under a minute. Clone the repo and run one command per skill:
 git clone https://github.com/apankov1/quality-engineering.git
 cd quality-engineering
 
-# Run all 174 tests across 8 skills
+# Run all tests across all skills
 node --experimental-strip-types --test skills/*/*.spec.ts
 
 # Or run individual skills:
@@ -179,7 +179,7 @@ Run the test suites with Node.js 22+ (no install needed):
 git clone https://github.com/apankov1/quality-engineering.git
 cd quality-engineering
 
-# Run all tests (174 tests across 8 skills)
+# Run all tests across all skills
 node --experimental-strip-types --test skills/*/*.spec.ts
 
 # Run the pairwise CLI demo (3×3×3 matrix + 8×4 stress test)
