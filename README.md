@@ -67,7 +67,7 @@ Each skill ships importable utilities alongside its tests. Import what you need:
 import { generatePairwiseMatrix } from './skills/pairwise-test-coverage/pairwise.ts';
 import { classifyFieldChange } from './skills/breaking-change-detector/breaking-change.ts';
 import { circuitBreakerTransition, CommandAckTracker } from './skills/websocket-client-resilience/resilience.ts';
-import { createBarrier, createTrackedCleanup } from './skills/barrier-concurrency-testing/test-fixtures.ts';
+import { createBarrier, createTrackedBarrier, releaseAllBarriers } from './skills/barrier-concurrency-testing/test-fixtures.ts';
 import { CircuitBreaker, RetryPolicy, createFaultInjector } from './skills/fault-injection-testing/fault-injection.ts';
 import { createStateMachine, testTransitionMatrix, assertGuardTruthTable } from './skills/model-based-testing/state-machine.ts';
 import { createMockLogger, assertLogEntry, assertNoLogsAbove } from './skills/observability-testing/structured-logger.ts';
