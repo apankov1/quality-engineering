@@ -53,6 +53,16 @@ NEVER use `setTimeout`, `sleep`, or arbitrary delays for concurrency testing. Us
 
 ---
 
+## Companion Skills
+
+This skill provides **deterministic timing control** for concurrency tests, not concurrency architecture guidance. For broader methodology:
+
+- Search `concurrency` on [skills.sh](https://skills.sh) for lock-free patterns, actor models, and thread safety analysis
+- Concurrent state machines need transition coverage — use [model-based-testing](https://github.com/apankov1/quality-engineering/tree/main/skills/model-based-testing) for N*N transition matrices and guard truth tables
+- Concurrent failure recovery needs resilience testing — use [fault-injection-testing](https://github.com/apankov1/quality-engineering/tree/main/skills/fault-injection-testing) for circuit breaker, retry policy, and queue preservation under concurrent load
+
+---
+
 ## Quick Reference
 
 | Scenario | Pattern | Example |

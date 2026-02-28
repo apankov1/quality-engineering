@@ -63,6 +63,17 @@ import {
 
 All 6 patterns have executable utilities and tests.
 
+## Companion Skills
+
+This skill provides **client-side resilience patterns**, not WebSocket server architecture guidance. For broader methodology:
+
+- Search `websocket` on [skills.sh](https://skills.sh) for server-side handlers, protocol design, and connection management
+- The circuit breaker is a state machine (closed/open/half-open) — use [model-based-testing](https://github.com/apankov1/quality-engineering/tree/main/skills/model-based-testing) for systematic transition matrix coverage of all state pairs
+- Backoff, circuit breaker, and retry patterns need fault simulation — use [fault-injection-testing](https://github.com/apankov1/quality-engineering/tree/main/skills/fault-injection-testing) for circuit breaker testing utilities and queue preservation assertions
+- Connection lifecycle events should log at correct levels — use [observability-testing](https://github.com/apankov1/quality-engineering/tree/main/skills/observability-testing) to assert structured log output on connect/disconnect/reconnect
+
+---
+
 ## Framework Adaptation
 
 These patterns are framework-agnostic. They work with:
