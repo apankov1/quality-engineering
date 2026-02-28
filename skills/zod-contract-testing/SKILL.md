@@ -117,7 +117,7 @@ it('refinement: positive vs non-positive', () => {
 
 ### Step 5: Generate Compound State Matrix
 
-For schemas with N optional fields, there are 2^N possible combinations. Test them all:
+For schemas with N optional fields, there are 2^N possible combinations. For 3-4 fields, test exhaustively. For 5+, classify into valid/invalid buckets (see decision table below):
 
 ```typescript
 // Cell schema: value?, candidates?, isGiven?
@@ -163,7 +163,7 @@ describe('cell schema compound states', () => {
 
     it(`${entry.label}: ${shouldFail ? 'rejects' : 'accepts'}`, () => {
       if (shouldFail) {
-        testInvalidInput(CellSchema, input, 'isGiven');  // Verify failure cause, not just rejection
+        testInvalidInput(CellSchema, input);  // Object-level .refine() reports at root path
       } else {
         testValidInput(CellSchema, input);
       }
