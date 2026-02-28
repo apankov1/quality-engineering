@@ -117,7 +117,7 @@ it('refinement: positive vs non-positive', () => {
 
 ### Step 5: Generate Compound State Matrix
 
-For schemas with N optional fields, there are 2^N possible combinations. For 3-4 fields, test exhaustively. For 5+, classify into valid/invalid buckets (see decision table below):
+For schemas with N optional fields, there are 2^N possible combinations. For 3-4 fields, test exhaustively. For 5+, switch to pairwise coverage (see decision table below):
 
 ```typescript
 // Cell schema: value?, candidates?, isGiven?
@@ -196,7 +196,7 @@ Every `.refine()` or `.superRefine()` MUST have tests for both the passing AND f
 **Severity**: must-fail
 
 ### missing_compound_state_test
-Schemas with 3+ optional fields SHOULD use compound state matrix. For 5+ fields, classify combinations into valid/invalid buckets rather than testing all 2^N individually.
+Schemas with 3+ optional fields SHOULD use compound state matrix. For 5+ fields, switch to [pairwise-test-coverage](https://github.com/apankov1/quality-engineering/tree/main/skills/pairwise-test-coverage) rather than testing all 2^N individually.
 **Severity**: should-fail
 
 ### schema_not_at_boundary
