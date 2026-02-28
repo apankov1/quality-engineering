@@ -206,6 +206,9 @@ export function assertGuardTruthTable<T extends Record<string, unknown>>(
 /**
  * Deep structural equality check for context values.
  * Handles primitives, plain objects, and arrays.
+ *
+ * Not intended for non-plain objects (Date, Map, Set, class instances).
+ * State machine contexts should be plain serializable data.
  */
 function deepEqual(a: unknown, b: unknown): boolean {
   if (a === b) return true;
@@ -240,7 +243,9 @@ export function assertContextMutation<T extends Record<string, unknown>>(
   const unexpected: string[] = [];
 
   for (const key of Object.keys(expectedChanges) as (keyof T & string)[]) {
-    if (deepEqual(after[key], expectedChanges[key])) {
+    if (!(key in after)) {
+      unexpected.push(`${key}: expected ${JSON.stringify(expectedChanges[key])}, but key was removed`);
+    } else if (deepEqual(after[key], expectedChanges[key])) {
       changed.push(key);
     } else {
       unexpected.push(`${key}: expected ${JSON.stringify(expectedChanges[key])}, got ${JSON.stringify(after[key])}`);

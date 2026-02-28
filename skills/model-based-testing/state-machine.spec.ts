@@ -277,6 +277,17 @@ describe("assertContextMutation", () => {
     assert.throws(() => assertContextMutation(before, after, { count: 1 }), /count: expected 1, got 2/);
   });
 
+  // Defect: Expected change on removed key must throw (not silently match undefined)
+  it("throws when expected key was removed from after", () => {
+    const before = { a: 1, b: 2 } as Record<string, unknown>;
+    const after = { b: 2 } as Record<string, unknown>;
+
+    assert.throws(
+      () => assertContextMutation(before, after, { a: undefined }),
+      /a: expected undefined, but key was removed/,
+    );
+  });
+
   // Defect: Must throw when unexpected field changes
   it("throws when non-expected field changes", () => {
     const before = { count: 0, name: "old" };
