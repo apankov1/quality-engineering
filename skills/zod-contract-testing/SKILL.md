@@ -181,7 +181,7 @@ describe('cell schema compound states', () => {
 | 0-2 | 1-4 | Enumerate manually |
 | 3 | 8 | Use matrix, manageable |
 | 4 | 16 | Use matrix, essential |
-| 5+ | 32+ | Use matrix + classify into valid/invalid buckets |
+| 5+ | 32+ | Switch to [pairwise-test-coverage](https://github.com/apankov1/quality-engineering/tree/main/skills/pairwise-test-coverage) — covers all field pairs in near-minimal test cases |
 
 ---
 
