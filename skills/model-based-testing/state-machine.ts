@@ -212,12 +212,14 @@ function deepEqual(a: unknown, b: unknown): boolean {
   if (a === null || b === null || typeof a !== "object" || typeof b !== "object") return false;
   if (Array.isArray(a) !== Array.isArray(b)) return false;
 
-  const keysA = Object.keys(a as Record<string, unknown>);
-  const keysB = Object.keys(b as Record<string, unknown>);
+  const objA = a as Record<string, unknown>;
+  const objB = b as Record<string, unknown>;
+  const keysA = Object.keys(objA);
+  const keysB = Object.keys(objB);
   if (keysA.length !== keysB.length) return false;
 
   for (const key of keysA) {
-    if (!deepEqual((a as Record<string, unknown>)[key], (b as Record<string, unknown>)[key])) return false;
+    if (!(key in objB) || !deepEqual(objA[key], objB[key])) return false;
   }
   return true;
 }
@@ -247,7 +249,10 @@ export function assertContextMutation<T extends Record<string, unknown>>(
 
   for (const key of Object.keys(before) as (keyof T & string)[]) {
     if (key in expectedChanges) continue;
-    if (deepEqual(before[key], after[key])) {
+    // Detect field removal: key exists in before but not in after
+    if (!(key in after)) {
+      unexpected.push(`${key}: changed unexpectedly from ${JSON.stringify(before[key])} to undefined (key removed)`);
+    } else if (deepEqual(before[key], after[key])) {
       unchanged.push(key);
     } else {
       unexpected.push(

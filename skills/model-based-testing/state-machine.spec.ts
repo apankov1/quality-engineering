@@ -296,6 +296,14 @@ describe("assertContextMutation", () => {
     assert.throws(() => assertContextMutation(before, after as typeof before, {}), /leaked: appeared unexpectedly/);
   });
 
+  // Defect: Must detect field removal (key present with undefined vs key absent)
+  it("detects field removal as unexpected change", () => {
+    const before = { a: undefined, b: 1 } as Record<string, unknown>;
+    const after = { b: 1 } as Record<string, unknown>;
+
+    assert.throws(() => assertContextMutation(before, after, {}), /a: changed unexpectedly.*key removed/);
+  });
+
   // Defect: Must use deep equality for object/array values
   it("compares nested objects structurally, not by reference", () => {
     const before = { count: 0, meta: { a: 1 } };

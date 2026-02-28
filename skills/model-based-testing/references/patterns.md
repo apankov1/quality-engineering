@@ -50,7 +50,7 @@ function canStart(input: ProcessGuardInput): boolean {
 
 // Key cases from the truth table (3 states × 2 booleans × 2 booleans = 12 combos)
 // Only the single true case and one false per failing condition shown for brevity.
-// In production, enumerate all 12 — use generateCompoundStateMatrix for full coverage.
+// In production, enumerate all 12.
 assertGuardTruthTable(canStart, [
   { inputs: { state: 'pending', hasResources: true, isAuthorized: true }, expected: true },
   { inputs: { state: 'running', hasResources: true, isAuthorized: true }, expected: false },
