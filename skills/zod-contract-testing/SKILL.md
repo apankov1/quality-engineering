@@ -71,9 +71,9 @@ it('rejects wrong type', () => {
   testInvalidInput(UserSchema, { name: 123 }, 'name');
 });
 
-it('rejects extra invalid fields', () => {
-  // Zod strips extra fields by default, so this passes
-  // Use .strict() if you want to reject unknown fields
+it('rejects unknown fields with strict schema', () => {
+  const StrictUserSchema = UserSchema.strict();
+  testInvalidInput(StrictUserSchema, { name: 'Alice', role: 'admin' });
 });
 ```
 
@@ -163,7 +163,7 @@ describe('cell schema compound states', () => {
 
     it(`${entry.label}: ${shouldFail ? 'rejects' : 'accepts'}`, () => {
       if (shouldFail) {
-        testInvalidInput(CellSchema, input);
+        testInvalidInput(CellSchema, input, 'isGiven');  // Verify failure cause, not just rejection
       } else {
         testValidInput(CellSchema, input);
       }
@@ -196,8 +196,8 @@ Every `.refine()` or `.superRefine()` MUST have tests for both the passing AND f
 **Severity**: must-fail
 
 ### missing_compound_state_test
-Schemas with 3+ optional fields MUST use compound state matrix to cover all combinations.
-**Severity**: must-fail
+Schemas with 3+ optional fields SHOULD use compound state matrix. For 5+ fields, classify combinations into valid/invalid buckets rather than testing all 2^N individually.
+**Severity**: should-fail
 
 ### schema_not_at_boundary
 Zod parsing MUST happen at system boundaries (API handlers, WebSocket messages, database reads), not inside business logic.
