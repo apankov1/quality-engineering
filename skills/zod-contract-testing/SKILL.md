@@ -211,10 +211,13 @@ Use `Schema.parse()` or `Schema.safeParse()`, NEVER `as Type` casts for external
 
 ## Companion Skills
 
-This skill teaches **testing methodology**, not Zod API usage. For general Zod guidance, pair with a Zod API reference skill:
+This skill teaches **testing methodology**, not Zod API usage. For broader methodology:
 
 - Search `zod` on [skills.sh](https://skills.sh) for schema authoring, transforms, error handling, and framework integrations
 - Our utilities work with any Zod version (v3, v4) via the `ZodLikeSchema` interface — no version lock-in
+- Schemas with 5+ optional fields produce 32+ combinations — use [pairwise-test-coverage](https://github.com/apankov1/quality-engineering/tree/main/skills/pairwise-test-coverage) for near-minimal coverage of all field pairs
+- Schema parsing at boundaries often logs errors — use [observability-testing](https://github.com/apankov1/quality-engineering/tree/main/skills/observability-testing) to assert structured log output on validation failures
+- Schema evolution testing pairs with resilience — use [fault-injection-testing](https://github.com/apankov1/quality-engineering/tree/main/skills/fault-injection-testing) for retry and circuit breaker testing around schema-validated endpoints
 
 ---
 

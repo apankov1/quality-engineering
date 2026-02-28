@@ -6,6 +6,9 @@ on:
   pull_request:
     branches: [main]
 
+permissions:
+  contents: read
+
 jobs:
   skill-tests:
     name: Skill tests — Node ${{ matrix.node-version }}
@@ -21,10 +24,10 @@ jobs:
           - node-version: 23
             runner: native
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
 
       - name: Use Node.js ${{ matrix.node-version }}
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
           node-version: ${{ matrix.node-version }}
 
@@ -34,20 +37,10 @@ jobs:
       - name: Lint
         run: npm run lint
 
-      - name: All 4 skills (63 tests) — native strip-types
+      - name: All skills — native strip-types
         if: matrix.runner == 'native'
-        run: |
-          node --experimental-strip-types --test \
-            skills/pairwise-test-coverage/pairwise.spec.ts \
-            skills/barrier-concurrency-testing/test-fixtures.spec.ts \
-            skills/breaking-change-detector/breaking-change.spec.ts \
-            skills/websocket-client-resilience/resilience.spec.ts
+        run: node --experimental-strip-types --test skills/*/*.spec.ts
 
-      - name: All 4 skills (63 tests) — npx tsx
+      - name: All skills — npx tsx
         if: matrix.runner == 'tsx'
-        run: |
-          npx tsx --test \
-            skills/pairwise-test-coverage/pairwise.spec.ts \
-            skills/barrier-concurrency-testing/test-fixtures.spec.ts \
-            skills/breaking-change-detector/breaking-change.spec.ts \
-            skills/websocket-client-resilience/resilience.spec.ts
+        run: npx tsx --test skills/*/*.spec.ts
