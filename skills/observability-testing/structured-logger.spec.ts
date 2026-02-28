@@ -98,6 +98,17 @@ describe("assertLogEntry", () => {
     assert.equal(entry.context?.service, "api");
   });
 
+  // Defect: Must match nested context structurally, not by reference
+  it("matches nested context objects", () => {
+    const logger = createMockLogger();
+    logger.info("Request completed", { meta: { duration: 42, tags: ["fast"] } });
+
+    const entry = assertLogEntry(logger, "info", "Request completed", {
+      meta: { duration: 42, tags: ["fast"] },
+    });
+    assert.ok(entry);
+  });
+
   // Defect: Must throw with details when no match
   it("throws when no matching entry found", () => {
     const logger = createMockLogger();
@@ -183,8 +194,16 @@ describe("assertErrorLogged", () => {
     assert.equal(entry.error?.name, "TypeError");
   });
 
-  // Defect: Must throw when error missing
-  it("throws when error instance missing", () => {
+  // Defect: Must always enforce Error instance, even without matcher
+  it("throws when error instance missing (no matcher)", () => {
+    const logger = createMockLogger();
+    logger.error("Operation failed"); // No error instance
+
+    assert.throws(() => assertErrorLogged(logger, "Operation failed"), /include an Error instance/);
+  });
+
+  // Defect: Must throw when error missing (with matcher)
+  it("throws when error instance missing (with matcher)", () => {
     const logger = createMockLogger();
     logger.error("Operation failed"); // No error instance
 

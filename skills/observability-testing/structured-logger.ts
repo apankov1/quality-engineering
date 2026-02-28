@@ -104,6 +104,34 @@ export function createMockLogger(): MockLogger {
 }
 
 // ============================================================================
+// HELPERS
+// ============================================================================
+
+/**
+ * Deep structural equality check for context values.
+ * Handles primitives, plain objects, and arrays.
+ *
+ * Not intended for non-plain objects (Date, Map, Set, class instances).
+ * Log context should be plain serializable data.
+ */
+function deepEqual(a: unknown, b: unknown): boolean {
+  if (a === b) return true;
+  if (a === null || b === null || typeof a !== "object" || typeof b !== "object") return false;
+  if (Array.isArray(a) !== Array.isArray(b)) return false;
+
+  const objA = a as Record<string, unknown>;
+  const objB = b as Record<string, unknown>;
+  const keysA = Object.keys(objA);
+  const keysB = Object.keys(objB);
+  if (keysA.length !== keysB.length) return false;
+
+  for (const key of keysA) {
+    if (!(key in objB) || !deepEqual(objA[key], objB[key])) return false;
+  }
+  return true;
+}
+
+// ============================================================================
 // LOG ASSERTIONS
 // ============================================================================
 
@@ -128,7 +156,7 @@ export function assertLogEntry(
     if (contextMatcher) {
       if (!e.context) return false;
       for (const [key, value] of Object.entries(contextMatcher)) {
-        if (e.context[key] !== value) return false;
+        if (!deepEqual(e.context[key], value)) return false;
       }
     }
 
@@ -170,7 +198,10 @@ export function assertHasLogLevel(logger: MockLogger, level: LogLevel): void {
 }
 
 /**
- * Assert that an error log includes the expected error instance.
+ * Assert that an error log includes an Error instance.
+ *
+ * Always enforces that `entry.error` is present. Use `assertLogEntry`
+ * if you only need to check for an error-level message without an Error instance.
  */
 export function assertErrorLogged(
   logger: MockLogger,
@@ -179,10 +210,11 @@ export function assertErrorLogged(
 ): StructuredLogEntry {
   const entry = assertLogEntry(logger, "error", message);
 
+  if (!entry.error) {
+    throw new Error(`Expected error log "${message}" to include an Error instance, but error was undefined`);
+  }
+
   if (errorMatcher) {
-    if (!entry.error) {
-      throw new Error(`Expected error log "${message}" to include an Error instance, but error was undefined`);
-    }
     if (errorMatcher.name && entry.error.name !== errorMatcher.name) {
       throw new Error(`Expected error.name "${errorMatcher.name}", got "${entry.error.name}"`);
     }
