@@ -94,6 +94,16 @@ Categories 2-4 require static analysis of SQL migrations, OpenAPI specs, or prot
 - Widened type `Status: 'active' | 'paused'` to include `'archived'`
 ```
 
+## Companion Skills
+
+This skill provides **breaking change detection**, not schema authoring or migration guidance. For broader methodology:
+
+- Search `schema evolution` on [skills.sh](https://skills.sh) for migration strategies, versioning patterns, and backward compatibility tooling
+- Schema boundary validation pairs with breaking change detection — use [zod-contract-testing](https://github.com/apankov1/quality-engineering/tree/main/skills/zod-contract-testing) for compound state matrices and schema evolution testing
+- Serialized schemas with `.catch()` defaults need structured error logging — use [observability-testing](https://github.com/apankov1/quality-engineering/tree/main/skills/observability-testing) to assert log output when old data triggers fallback paths
+
+---
+
 ## Framework Adaptation
 
 This skill applies to any system with shared contracts/interfaces, persistent state, event sourcing, real-time protocols, or RPC/API layers with independent client release cycles.

@@ -70,6 +70,16 @@ The greedy algorithm never enumerates the Cartesian product. Pair count grows as
 - [ ] Pairwise matrix as `it.each` test cases
 - [ ] Tests fail before fix, pass after
 
+## Companion Skills
+
+This skill provides **combinatorial test matrix generation**, not test design guidance. For broader methodology:
+
+- Search `combinatorial testing` on [skills.sh](https://skills.sh) for constraint handling, higher-strength covering arrays, and test oracle strategies
+- Guard truth tables with 5+ boolean inputs use pairwise for coverage — use [model-based-testing](https://github.com/apankov1/quality-engineering/tree/main/skills/model-based-testing) for state machine transition matrices and guard truth table generation
+- Zod schemas with 5+ optional fields use pairwise for compound state coverage — use [zod-contract-testing](https://github.com/apankov1/quality-engineering/tree/main/skills/zod-contract-testing) for schema boundary validation and compound state matrices
+
+---
+
 ## Details
 
 See references for:
