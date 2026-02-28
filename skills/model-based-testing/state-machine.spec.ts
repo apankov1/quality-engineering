@@ -301,7 +301,7 @@ describe("assertContextMutation", () => {
     const before = { a: undefined, b: 1 } as Record<string, unknown>;
     const after = { b: 1 } as Record<string, unknown>;
 
-    assert.throws(() => assertContextMutation(before, after, {}), /a: changed unexpectedly.*key removed/);
+    assert.throws(() => assertContextMutation(before, after, {}), /a: removed unexpectedly/);
   });
 
   // Defect: Must use deep equality for object/array values

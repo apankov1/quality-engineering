@@ -251,7 +251,7 @@ export function assertContextMutation<T extends Record<string, unknown>>(
     if (key in expectedChanges) continue;
     // Detect field removal: key exists in before but not in after
     if (!(key in after)) {
-      unexpected.push(`${key}: changed unexpectedly from ${JSON.stringify(before[key])} to undefined (key removed)`);
+      unexpected.push(`${key}: removed unexpectedly`);
     } else if (deepEqual(before[key], after[key])) {
       unchanged.push(key);
     } else {
