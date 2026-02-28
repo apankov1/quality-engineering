@@ -44,6 +44,19 @@ export interface StateMachine<S extends string = string> {
  */
 export function createStateMachine<S extends string>(transitions: Record<S, readonly S[]>): StateMachine<S> {
   const states = Object.keys(transitions) as S[];
+  const stateSet = new Set(states);
+
+  // Validate all target states are declared as keys
+  for (const from of states) {
+    for (const to of transitions[from]) {
+      if (!stateSet.has(to)) {
+        throw new Error(
+          `Undeclared target state "${to}" in transition from "${from}". All target states must be keys in the transition map.`,
+        );
+      }
+    }
+  }
+
   return { states, transitions };
 }
 
@@ -222,6 +235,12 @@ export function assertContextMutation<T extends Record<string, unknown>>(
         `${key}: changed unexpectedly from ${JSON.stringify(before[key])} to ${JSON.stringify(after[key])}`,
       );
     }
+  }
+
+  // Detect keys added in after that weren't in before or expectedChanges
+  for (const key of Object.keys(after) as (keyof T & string)[]) {
+    if (key in before || key in expectedChanges) continue;
+    unexpected.push(`${key}: appeared unexpectedly with value ${JSON.stringify(after[key])}`);
   }
 
   if (unexpected.length > 0) {

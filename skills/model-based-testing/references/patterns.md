@@ -48,7 +48,7 @@ function canStart(input: ProcessGuardInput): boolean {
   return input.state === 'pending' && input.hasResources && input.isAuthorized;
 }
 
-// Test representative cases
+// Exhaustive truth table (3 booleans × 3 state values = manageable)
 assertGuardTruthTable(canStart, [
   { inputs: { state: 'pending', hasResources: true, isAuthorized: true }, expected: true },
   { inputs: { state: 'running', hasResources: true, isAuthorized: true }, expected: false },

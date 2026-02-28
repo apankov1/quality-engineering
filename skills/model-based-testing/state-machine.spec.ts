@@ -35,6 +35,14 @@ describe("createStateMachine", () => {
     const machine = createStateMachine({});
     assert.deepEqual(machine.states, []);
   });
+
+  // Defect: Undeclared target states must throw at creation time
+  it("throws on undeclared target state", () => {
+    assert.throws(
+      () => createStateMachine({ a: ["b"], b: ["ghost"] }),
+      /Undeclared target state "ghost" in transition from "b"/,
+    );
+  });
 });
 
 // ============================================================================
@@ -278,6 +286,14 @@ describe("assertContextMutation", () => {
       () => assertContextMutation(before, after, { count: 1 }),
       /name: changed unexpectedly from "old" to "new"/,
     );
+  });
+
+  // Defect: Must detect newly added keys in after
+  it("throws when after has keys not in before", () => {
+    const before = { count: 1 };
+    const after = { count: 1, leaked: true };
+
+    assert.throws(() => assertContextMutation(before, after as typeof before, {}), /leaked: appeared unexpectedly/);
   });
 
   // Defect: Must handle multiple expected changes

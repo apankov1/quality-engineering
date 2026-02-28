@@ -156,7 +156,7 @@ State machines MUST have tests for ALL state pairs, not just happy paths. If you
 **Severity**: must-fail
 
 ### missing_guard_truth_table
-Guard functions with multiple boolean inputs MUST have truth table tests covering all 2^N combinations.
+Guard functions with multiple boolean inputs MUST have truth table tests covering all 2^N combinations (for N ≤ 4). For 5+ boolean inputs, switch to pairwise coverage.
 **Severity**: must-fail
 
 ### missing_context_mutation_test
