@@ -296,6 +296,24 @@ describe("assertContextMutation", () => {
     assert.throws(() => assertContextMutation(before, after as typeof before, {}), /leaked: appeared unexpectedly/);
   });
 
+  // Defect: Must use deep equality for object/array values
+  it("compares nested objects structurally, not by reference", () => {
+    const before = { count: 0, meta: { a: 1 } };
+    const after = { count: 1, meta: { a: 1 } };
+
+    const result = assertContextMutation(before, after, { count: 1 });
+    assert.deepEqual(result.unchanged, ["meta"]); // meta unchanged despite different reference
+  });
+
+  // Defect: Must handle expected changes with nested objects
+  it("accepts structurally equal expected objects", () => {
+    const before = { tags: ["old"] };
+    const after = { tags: ["new", "added"] };
+
+    const result = assertContextMutation(before, after, { tags: ["new", "added"] });
+    assert.deepEqual(result.changed, ["tags"]);
+  });
+
   // Defect: Must handle multiple expected changes
   it("handles multiple expected changes", () => {
     const before = { a: 1, b: 2, c: 3 };

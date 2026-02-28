@@ -204,6 +204,25 @@ export function assertGuardTruthTable<T extends Record<string, unknown>>(
 // ============================================================================
 
 /**
+ * Deep structural equality check for context values.
+ * Handles primitives, plain objects, and arrays.
+ */
+function deepEqual(a: unknown, b: unknown): boolean {
+  if (a === b) return true;
+  if (a === null || b === null || typeof a !== "object" || typeof b !== "object") return false;
+  if (Array.isArray(a) !== Array.isArray(b)) return false;
+
+  const keysA = Object.keys(a as Record<string, unknown>);
+  const keysB = Object.keys(b as Record<string, unknown>);
+  if (keysA.length !== keysB.length) return false;
+
+  for (const key of keysA) {
+    if (!deepEqual((a as Record<string, unknown>)[key], (b as Record<string, unknown>)[key])) return false;
+  }
+  return true;
+}
+
+/**
  * Assert that a transition produces the expected context changes.
  *
  * Compares before/after context objects, checking that specified
@@ -219,7 +238,7 @@ export function assertContextMutation<T extends Record<string, unknown>>(
   const unexpected: string[] = [];
 
   for (const key of Object.keys(expectedChanges) as (keyof T & string)[]) {
-    if (after[key] === expectedChanges[key]) {
+    if (deepEqual(after[key], expectedChanges[key])) {
       changed.push(key);
     } else {
       unexpected.push(`${key}: expected ${JSON.stringify(expectedChanges[key])}, got ${JSON.stringify(after[key])}`);
@@ -228,7 +247,7 @@ export function assertContextMutation<T extends Record<string, unknown>>(
 
   for (const key of Object.keys(before) as (keyof T & string)[]) {
     if (key in expectedChanges) continue;
-    if (before[key] === after[key]) {
+    if (deepEqual(before[key], after[key])) {
       unchanged.push(key);
     } else {
       unexpected.push(
