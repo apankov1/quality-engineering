@@ -63,7 +63,7 @@ Verify that specific logs were recorded with correct level, message, and context
 it('logs error with full context on failure', async () => {
   const logger = createMockLogger();
 
-  await myHandler({ logger, shouldFail: true });
+  await assert.rejects(() => myHandler({ logger, shouldFail: true }));
 
   assertLogEntry(logger, 'error', 'Request failed', {
     component: 'Handler',
