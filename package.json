@@ -8,7 +8,7 @@
     "lint": "biome check .",
     "lint:fix": "biome check --write .",
     "format": "biome format --write .",
-    "test": "node --experimental-strip-types --test skills/*/pairwise.spec.ts skills/*/test-fixtures.spec.ts skills/*/breaking-change.spec.ts skills/*/resilience.spec.ts"
+    "test": "node --experimental-strip-types --test skills/*/*.spec.ts"
   },
   "devDependencies": {
     "@biomejs/biome": "^1.9.4"

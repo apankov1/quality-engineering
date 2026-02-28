@@ -34,20 +34,10 @@ jobs:
       - name: Lint
         run: npm run lint
 
-      - name: All 4 skills (63 tests) — native strip-types
+      - name: All 8 skills (174 tests) — native strip-types
         if: matrix.runner == 'native'
-        run: |
-          node --experimental-strip-types --test \
-            skills/pairwise-test-coverage/pairwise.spec.ts \
-            skills/barrier-concurrency-testing/test-fixtures.spec.ts \
-            skills/breaking-change-detector/breaking-change.spec.ts \
-            skills/websocket-client-resilience/resilience.spec.ts
+        run: node --experimental-strip-types --test skills/*/*.spec.ts
 
-      - name: All 4 skills (63 tests) — npx tsx
+      - name: All 8 skills (174 tests) — npx tsx
         if: matrix.runner == 'tsx'
-        run: |
-          npx tsx --test \
-            skills/pairwise-test-coverage/pairwise.spec.ts \
-            skills/barrier-concurrency-testing/test-fixtures.spec.ts \
-            skills/breaking-change-detector/breaking-change.spec.ts \
-            skills/websocket-client-resilience/resilience.spec.ts
+        run: npx tsx --test skills/*/*.spec.ts
