@@ -183,8 +183,10 @@ const dbWrite = createFaultInjector(realDbWrite, faultMap);
 
 // In tests
 await dbWrite(null, data);       // Normal execution
-await dbWrite('timeout', data);  // Throws ETIMEDOUT
+await dbWrite('timeout', data);  // Throws ETIMEDOUT (synchronously)
 ```
+
+> **Note**: `createFaultInjector` throws synchronously even when wrapping async functions. This is intentional — fault injection simulates failures at the call boundary, not inside the async pipeline. Use `assert.throws()`, not `assert.rejects()`.
 
 ### Step 7: Assert Queue Preservation
 
