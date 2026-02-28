@@ -1,6 +1,10 @@
 # Quality Engineering Skills for AI Coding Agents
 
 [![CI](https://github.com/apankov1/quality-engineering/actions/workflows/ci.yml/badge.svg)](https://github.com/apankov1/quality-engineering/actions/workflows/ci.yml)
+[![Skills](https://img.shields.io/badge/skills-8-blue)](skills/)
+[![Tests](https://img.shields.io/badge/tests-174-brightgreen)](skills/)
+[![Node](https://img.shields.io/badge/node-%E2%89%A520-339933?logo=node.js&logoColor=white)](https://nodejs.org)
+[![License: MIT](https://img.shields.io/badge/license-MIT-yellow)](LICENSE)
 
 Quality engineering methodologies for AI coding agents. Deterministic concurrency testing, combinatorial coverage, breaking change detection, client resilience patterns, fault injection, state machine testing, contract validation, and observability assertions.
 
