@@ -1,6 +1,13 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import { classifyEventTypeChanges, classifyFieldChange, classifySerializedSchema } from "./breaking-change.ts";
+import {
+  classifyApiFieldSemantics,
+  classifyEnumValueChanges,
+  classifyEventTypeChanges,
+  classifyFieldChange,
+  classifySerializedSchema,
+  classifyStatusCodeChanges,
+} from "./breaking-change.ts";
 
 /**
  * Tests for the breaking change classification utilities.
@@ -144,5 +151,125 @@ describe("event type changes (category 6)", () => {
     assert.equal(result.safe, false);
     assert.deepEqual(result.removed.sort(), ["A", "C"]);
     assert.deepEqual(result.added.sort(), ["D", "E"]);
+  });
+});
+
+describe("api-level compatibility checks", () => {
+  it("status code removal is breaking", () => {
+    const result = classifyStatusCodeChanges([200, 400, 404], [200, 400]);
+    assert.equal(result.safe, false);
+    assert.deepEqual(result.removed, [404]);
+  });
+
+  it("status code additions are safe", () => {
+    const result = classifyStatusCodeChanges([200], [200, 202]);
+    assert.equal(result.safe, true);
+    assert.deepEqual(result.added, [202]);
+  });
+
+  it("enum value removal is breaking", () => {
+    const result = classifyEnumValueChanges(["draft", "published"], ["draft"]);
+    assert.equal(result.safe, false);
+    assert.deepEqual(result.removed, ["published"]);
+  });
+
+  it("enum value additions are safe", () => {
+    const result = classifyEnumValueChanges(["draft"], ["draft", "archived"]);
+    assert.equal(result.safe, true);
+    assert.deepEqual(result.added, ["archived"]);
+  });
+
+  it("semantic meaning changes are breaking", () => {
+    const result = classifyApiFieldSemantics(
+      [{ name: "amount", type: "number", required: true, semantic: "dollars" }],
+      [{ name: "amount", type: "number", required: true, semantic: "cents" }],
+    );
+    assert.equal(result.safe, false);
+    assert.ok(result.breaking.some((v) => v.includes("semantic changed")));
+  });
+
+  it("new required fields are breaking", () => {
+    const result = classifyApiFieldSemantics(
+      [{ name: "id", type: "string", required: true }],
+      [
+        { name: "id", type: "string", required: true },
+        { name: "tenantId", type: "string", required: true },
+      ],
+    );
+    assert.equal(result.safe, false);
+    assert.ok(result.breaking.some((v) => v.includes("tenantId: new required field")));
+  });
+
+  it("new optional fields are safe additions", () => {
+    const result = classifyApiFieldSemantics(
+      [{ name: "id", type: "string", required: true }],
+      [
+        { name: "id", type: "string", required: true },
+        { name: "traceId", type: "string", required: false },
+      ],
+    );
+    assert.equal(result.safe, true);
+    assert.deepEqual(result.added, ["traceId"]);
+  });
+
+  it("field removal is breaking", () => {
+    const result = classifyApiFieldSemantics(
+      [
+        { name: "id", type: "string", required: true },
+        { name: "name", type: "string", required: true },
+      ],
+      [{ name: "id", type: "string", required: true }],
+    );
+    assert.equal(result.safe, false);
+    assert.ok(result.breaking.some((v) => v.includes("name: removed")));
+  });
+
+  it("type change is breaking", () => {
+    const result = classifyApiFieldSemantics(
+      [{ name: "amount", type: "string", required: true }],
+      [{ name: "amount", type: "number", required: true }],
+    );
+    assert.equal(result.safe, false);
+    assert.ok(result.breaking.some((v) => v.includes("type changed from string to number")));
+  });
+
+  it("optional-to-required promotion is breaking", () => {
+    const result = classifyApiFieldSemantics(
+      [{ name: "email", type: "string", required: false }],
+      [{ name: "email", type: "string", required: true }],
+    );
+    assert.equal(result.safe, false);
+    assert.ok(result.breaking.some((v) => v.includes("email: made required")));
+  });
+
+  it("no changes is safe", () => {
+    const fields = [
+      { name: "id", type: "string", required: true },
+      { name: "name", type: "string", required: false },
+    ];
+    const result = classifyApiFieldSemantics(fields, fields);
+    assert.equal(result.safe, true);
+    assert.equal(result.breaking.length, 0);
+    assert.equal(result.added.length, 0);
+  });
+
+  it("empty field lists are safe", () => {
+    const result = classifyApiFieldSemantics([], []);
+    assert.equal(result.safe, true);
+    assert.equal(result.breaking.length, 0);
+  });
+
+  it("no changes to status codes is safe", () => {
+    const result = classifyStatusCodeChanges([200, 400], [200, 400]);
+    assert.equal(result.safe, true);
+    assert.equal(result.removed.length, 0);
+    assert.equal(result.added.length, 0);
+  });
+
+  it("no changes to enum values is safe", () => {
+    const result = classifyEnumValueChanges(["draft", "published"], ["draft", "published"]);
+    assert.equal(result.safe, true);
+    assert.equal(result.removed.length, 0);
+    assert.equal(result.added.length, 0);
   });
 });

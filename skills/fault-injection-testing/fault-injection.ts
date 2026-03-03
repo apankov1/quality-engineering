@@ -72,17 +72,19 @@ export class CircuitBreaker {
   private successes = 0;
   private lastFailureTime = 0;
   private readonly config: Required<CircuitBreakerConfig>;
+  private readonly nowFn: () => number;
 
-  constructor(config: CircuitBreakerConfig) {
+  constructor(config: CircuitBreakerConfig, nowFn: () => number = Date.now) {
     this.config = {
       ...config,
       successThreshold: config.successThreshold ?? 1,
     };
+    this.nowFn = nowFn;
   }
 
   getState(): CircuitState {
     // Auto-transition from open to half-open after timeout
-    if (this.state === "open" && Date.now() - this.lastFailureTime >= this.config.resetTimeout) {
+    if (this.state === "open" && this.nowFn() - this.lastFailureTime >= this.config.resetTimeout) {
       this.state = "half-open";
       this.successes = 0;
     }
@@ -120,7 +122,7 @@ export class CircuitBreaker {
    */
   recordFailure(): void {
     const currentState = this.getState(); // Trigger auto-transition from open→half-open
-    this.lastFailureTime = Date.now();
+    this.lastFailureTime = this.nowFn();
 
     if (currentState === "half-open") {
       // Any failure in half-open immediately opens circuit
@@ -179,13 +181,15 @@ export interface RetryPolicyConfig {
  */
 export class RetryPolicy {
   private readonly config: Required<RetryPolicyConfig>;
+  private readonly randomFn: () => number;
 
-  constructor(config: RetryPolicyConfig) {
+  constructor(config: RetryPolicyConfig, randomFn: () => number = Math.random) {
     this.config = {
       ...config,
       maxDelay: config.maxDelay ?? 30000,
       jitterFactor: config.jitterFactor ?? 0.1,
     };
+    this.randomFn = randomFn;
   }
 
   /**
@@ -199,7 +203,9 @@ export class RetryPolicy {
     const cappedDelay = Math.min(exponentialDelay, this.config.maxDelay);
 
     // Add jitter: delay ± (delay * jitterFactor)
-    const jitter = cappedDelay * this.config.jitterFactor * (Math.random() * 2 - 1);
+    const rawRandom = this.randomFn();
+    const unitRandom = Number.isFinite(rawRandom) ? Math.min(1, Math.max(0, rawRandom)) : 0.5;
+    const jitter = cappedDelay * this.config.jitterFactor * (unitRandom * 2 - 1);
 
     return Math.max(0, Math.round(cappedDelay + jitter));
   }

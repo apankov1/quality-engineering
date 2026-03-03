@@ -1,6 +1,12 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import { formatAsMarkdownTable, formatAsTestCases, generatePairwiseMatrix, validateCoverage } from "./pairwise.ts";
+import {
+  formatAsMarkdownTable,
+  formatAsTestCases,
+  generatePairwiseMatrix,
+  generateThreewiseMatrix,
+  validateCoverage,
+} from "./pairwise.ts";
 
 describe("generatePairwiseMatrix", () => {
   it("returns empty array for no factors", () => {
@@ -88,6 +94,50 @@ describe("generatePairwiseMatrix", () => {
     const validation = validateCoverage(factors, matrix);
     assert.equal(validation.valid, true);
     assert.equal(validation.coverage, 100);
+  });
+
+  it("supports 3-wise coverage", () => {
+    const factors = {
+      region: ["us", "eu"],
+      platform: ["ios", "android"],
+      network: ["wifi", "cell"],
+      locale: ["en", "es"],
+    };
+    const matrix = generateThreewiseMatrix(factors);
+    const validation = validateCoverage(factors, matrix, { strength: 3 });
+    assert.equal(validation.valid, true);
+    assert.equal(validation.coverage, 100);
+    assert.ok(matrix.length <= 16, `Expected <= 16 cases, got ${matrix.length}`);
+  });
+
+  it("supports weighted coverage scoring", () => {
+    const factors = {
+      criticalPath: ["enabled", "disabled"],
+      transport: ["http", "ws", "grpc"],
+      auth: ["token", "cookie"],
+      cache: ["hot", "cold"],
+    };
+    const weighted = generatePairwiseMatrix(factors, {
+      factorWeights: {
+        criticalPath: 10,
+        auth: 4,
+      },
+    });
+    const validation = validateCoverage(factors, weighted, {
+      factorWeights: {
+        criticalPath: 10,
+        auth: 4,
+      },
+    });
+    assert.equal(validation.valid, true);
+    assert.equal(validation.coverage, 100);
+  });
+
+  it("throws when 3-wise requested with fewer than 3 factors", () => {
+    assert.throws(
+      () => generatePairwiseMatrix({ a: ["1", "2"], b: ["x", "y"] }, { strength: 3 }),
+      /3-wise coverage requires at least 3 factors/,
+    );
   });
 });
 

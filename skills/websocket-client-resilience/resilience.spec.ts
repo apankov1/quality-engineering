@@ -59,6 +59,29 @@ describe("backoff with jitter (pattern 1)", () => {
   it("returns 0 for non-finite attempts", () => {
     assert.equal(getBackoffDelay(Number.NaN, 1000, 30000), 0);
   });
+
+  it("supports deterministic RNG injection", () => {
+    // random=0 => -25% jitter, random=1 => +25% jitter
+    assert.equal(
+      getBackoffDelay(0, 1000, 30000, () => 0),
+      750,
+    );
+    assert.equal(
+      getBackoffDelay(0, 1000, 30000, () => 1),
+      1250,
+    );
+  });
+
+  it("clamps RNG output to [0, 1]", () => {
+    assert.equal(
+      getBackoffDelay(0, 1000, 30000, () => -1),
+      750,
+    );
+    assert.equal(
+      getBackoffDelay(0, 1000, 30000, () => 2),
+      1250,
+    );
+  });
 });
 
 describe("circuit breaker (pattern 2)", () => {

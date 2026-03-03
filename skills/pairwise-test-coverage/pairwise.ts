@@ -28,20 +28,34 @@ import { pathToFileURL } from "node:url";
 
 export type FactorValues = Record<string, string[]>;
 export type TestCase = Record<string, string>;
-type PairTuple = [string, string, string, string];
+type CoverageStrength = 2 | 3;
+type InteractionTuple = Array<[string, string]>;
+
+export interface PairwiseOptions {
+  /** Coverage strength: 2 = pairwise (default), 3 = three-wise */
+  strength?: CoverageStrength;
+  /** Optional factor weights for prioritizing critical-factor interactions */
+  factorWeights?: Record<string, number>;
+}
+
+const DEFAULT_STRENGTH: CoverageStrength = 2;
+const MAX_INTERACTIONS = 500_000;
 
 /**
- * Create a canonical key for a pair
+ * Create a canonical key for a k-wise interaction.
  */
-function pairKey(factorA: string, valueA: string, factorB: string, valueB: string): string {
-  const tuple: PairTuple = factorA < factorB ? [factorA, valueA, factorB, valueB] : [factorB, valueB, factorA, valueA];
-  return JSON.stringify(tuple);
+function interactionKey(interaction: InteractionTuple): string {
+  const normalized = [...interaction].sort(([factorA], [factorB]) => factorA.localeCompare(factorB));
+  return JSON.stringify(normalized);
 }
 
 /**
- * Parse a pair key back into its components
+ * Parse an interaction key back into its components.
  */
-function parsePairKey(key: string): [string, string, string, string] {
+function parseInteractionKey(key: string, cache: Map<string, InteractionTuple>): InteractionTuple {
+  const cached = cache.get(key);
+  if (cached) return cached;
+
   let parsed: unknown;
   try {
     parsed = JSON.parse(key);
@@ -50,70 +64,149 @@ function parsePairKey(key: string): [string, string, string, string] {
     throw new Error(`Invalid pair key: ${msg}`);
   }
 
-  if (!Array.isArray(parsed) || parsed.length !== 4 || parsed.some((p) => typeof p !== "string")) {
+  if (
+    !Array.isArray(parsed) ||
+    parsed.length === 0 ||
+    parsed.some(
+      (entry) =>
+        !Array.isArray(entry) || entry.length !== 2 || typeof entry[0] !== "string" || typeof entry[1] !== "string",
+    )
+  ) {
     throw new Error("Invalid pair key shape");
   }
 
-  return parsed as PairTuple;
+  const interaction = parsed as InteractionTuple;
+  cache.set(key, interaction);
+  return interaction;
 }
 
 /**
- * Generate all pairs that need to be covered.
- * O(C(n,2) × v²) — manageable even for large factor sets.
+ * Generate k-combinations from an array.
  */
-function generateAllPairs(factors: FactorValues): Set<string> {
-  const pairs = new Set<string>();
-  const factorNames = Object.keys(factors);
+function generateCombinations<T>(items: T[], k: number): T[][] {
+  if (k <= 0 || k > items.length) return [];
+  const result: T[][] = [];
+  const current: T[] = [];
 
-  for (let i = 0; i < factorNames.length; i++) {
-    for (let j = i + 1; j < factorNames.length; j++) {
-      const factorA = factorNames[i];
-      const factorB = factorNames[j];
-
-      for (const valueA of factors[factorA]) {
-        for (const valueB of factors[factorB]) {
-          pairs.add(pairKey(factorA, valueA, factorB, valueB));
-        }
-      }
+  const visit = (start: number): void => {
+    if (current.length === k) {
+      result.push([...current]);
+      return;
     }
+    for (let i = start; i <= items.length - (k - current.length); i++) {
+      current.push(items[i]);
+      visit(i + 1);
+      current.pop();
+    }
+  };
+
+  visit(0);
+  return result;
+}
+
+/**
+ * Generate all required k-wise interactions for coverage.
+ */
+function generateAllInteractions(
+  factors: FactorValues,
+  factorNames: string[],
+  strength: CoverageStrength,
+): Set<string> {
+  const interactions = new Set<string>();
+  const factorCombos = generateCombinations(factorNames, strength);
+
+  for (const combo of factorCombos) {
+    const current: InteractionTuple = [];
+    const build = (idx: number): void => {
+      if (idx === combo.length) {
+        interactions.add(interactionKey(current));
+        if (interactions.size > MAX_INTERACTIONS) {
+          throw new Error(
+            `Interaction count exceeds practical limit (${MAX_INTERACTIONS}). Reduce factor/value count or use lower strength.`,
+          );
+        }
+        return;
+      }
+
+      const factor = combo[idx];
+      for (const value of factors[factor]) {
+        current.push([factor, value]);
+        build(idx + 1);
+        current.pop();
+      }
+    };
+    build(0);
   }
 
-  return pairs;
+  return interactions;
+}
+
+function scoreInteraction(interaction: InteractionTuple, weights?: Record<string, number>): number {
+  if (!weights) return 1;
+  const totalWeight = interaction.reduce((sum, [factor]) => sum + (weights[factor] ?? 1), 0);
+  return totalWeight / interaction.length;
+}
+
+function orderFactorsByWeight(factorNames: string[], weights?: Record<string, number>): string[] {
+  if (!weights) return factorNames;
+  return [...factorNames].sort((a, b) => (weights[b] ?? 1) - (weights[a] ?? 1) || a.localeCompare(b));
 }
 
 /**
- * Count how many uncovered pairs a candidate value would cover,
- * given the values already chosen for preceding factors in this row.
+ * Count how many uncovered interactions a candidate value would complete.
  */
-function countNewPairsForValue(
+function countNewInteractionsForValue(
   factorName: string,
   value: string,
   partialCase: TestCase,
-  uncoveredPairs: Set<string>,
+  uncoveredInteractions: Set<string>,
+  parseCache: Map<string, InteractionTuple>,
+  weights?: Record<string, number>,
 ): number {
-  let count = 0;
+  let score = 0;
 
-  for (const [assignedFactor, assignedValue] of Object.entries(partialCase)) {
-    const key = pairKey(factorName, value, assignedFactor, assignedValue);
-    if (uncoveredPairs.has(key)) {
-      count++;
+  for (const key of uncoveredInteractions) {
+    const interaction = parseInteractionKey(key, parseCache);
+
+    let hasCandidateFactor = false;
+    let complete = true;
+    for (const [factor, interactionValue] of interaction) {
+      if (factor === factorName) {
+        if (interactionValue !== value) {
+          complete = false;
+          break;
+        }
+        hasCandidateFactor = true;
+        continue;
+      }
+
+      if (partialCase[factor] !== interactionValue) {
+        complete = false;
+        break;
+      }
+    }
+
+    if (hasCandidateFactor && complete) {
+      score += scoreInteraction(interaction, weights);
     }
   }
 
-  return count;
+  return score;
 }
 
 /**
- * Mark pairs as covered by this test case
+ * Mark interactions as covered by this test case.
  */
-function markPairsCovered(testCase: TestCase, uncoveredPairs: Set<string>, factorNames: string[]): void {
-  for (let i = 0; i < factorNames.length; i++) {
-    for (let j = i + 1; j < factorNames.length; j++) {
-      const factorA = factorNames[i];
-      const factorB = factorNames[j];
-      const key = pairKey(factorA, testCase[factorA], factorB, testCase[factorB]);
-      uncoveredPairs.delete(key);
-    }
+function markInteractionsCovered(
+  testCase: TestCase,
+  uncoveredInteractions: Set<string>,
+  factorNames: string[],
+  strength: CoverageStrength,
+): void {
+  const factorCombos = generateCombinations(factorNames, strength);
+  for (const combo of factorCombos) {
+    const interaction: InteractionTuple = combo.map((factor) => [factor, testCase[factor]]);
+    uncoveredInteractions.delete(interactionKey(interaction));
   }
 }
 
@@ -127,27 +220,34 @@ function markPairsCovered(testCase: TestCase, uncoveredPairs: Set<string>, facto
  * Seeding from an uncovered pair guarantees at least 1 new pair per row,
  * so the algorithm always terminates.
  */
-function buildGreedyTestCase(factors: FactorValues, factorNames: string[], uncoveredPairs: Set<string>): TestCase {
+function buildGreedyTestCase(
+  factors: FactorValues,
+  factorNames: string[],
+  uncoveredInteractions: Set<string>,
+  parseCache: Map<string, InteractionTuple>,
+  weights?: Record<string, number>,
+): TestCase {
   const testCase: TestCase = {};
 
-  // Seed from an uncovered pair
-  const firstUncoveredResult = uncoveredPairs.values().next();
-  if (!firstUncoveredResult.value) throw new Error("No uncovered pairs available");
-  const [factorA, valueA, factorB, valueB] = parsePairKey(firstUncoveredResult.value);
-  testCase[factorA] = valueA;
-  testCase[factorB] = valueB;
+  // Seed from an uncovered interaction
+  const firstUncoveredResult = uncoveredInteractions.values().next();
+  if (!firstUncoveredResult.value) throw new Error("No uncovered interactions available");
+  const seedInteraction = parseInteractionKey(firstUncoveredResult.value, parseCache);
+  for (const [factor, seededValue] of seedInteraction) {
+    testCase[factor] = seededValue;
+  }
 
   // Greedily fill remaining factors
   for (const factor of factorNames) {
     if (factor in testCase) continue;
 
     let bestValue = factors[factor][0];
-    let bestCount = -1;
+    let bestScore = -1;
 
     for (const value of factors[factor]) {
-      const count = countNewPairsForValue(factor, value, testCase, uncoveredPairs);
-      if (count > bestCount) {
-        bestCount = count;
+      const score = countNewInteractionsForValue(factor, value, testCase, uncoveredInteractions, parseCache, weights);
+      if (score > bestScore) {
+        bestScore = score;
         bestValue = value;
       }
     }
@@ -172,8 +272,13 @@ function buildGreedyTestCase(factors: FactorValues, factorNames: string[], uncov
  *
  * This handles large factor sets (8×8 = 16M Cartesian) in milliseconds.
  */
-export function generatePairwiseMatrix(factors: FactorValues): TestCase[] {
-  const factorNames = Object.keys(factors);
+export function generatePairwiseMatrix(factors: FactorValues, options: PairwiseOptions = {}): TestCase[] {
+  const strength = options.strength ?? DEFAULT_STRENGTH;
+  if (strength !== 2 && strength !== 3) {
+    throw new Error(`Unsupported coverage strength ${String(strength)}. Supported values: 2 or 3.`);
+  }
+
+  const factorNames = orderFactorsByWeight(Object.keys(factors), options.factorWeights);
 
   // Safety rails: prevent runaway generation on extreme inputs
   if (factorNames.length > 20) {
@@ -186,6 +291,9 @@ export function generatePairwiseMatrix(factors: FactorValues): TestCase[] {
     throw new Error(
       `Factor has too many values (${maxValues}). Maximum is 50. Pair count grows as O(factors² × values²).`,
     );
+  }
+  if (strength === 3 && factorNames.length < 3) {
+    throw new Error("3-wise coverage requires at least 3 factors.");
   }
 
   // Edge cases
@@ -201,16 +309,30 @@ export function generatePairwiseMatrix(factors: FactorValues): TestCase[] {
     return factors[factorNames[0]].map((v) => ({ [factorNames[0]]: v }));
   }
 
-  const uncoveredPairs = generateAllPairs(factors);
+  const uncoveredInteractions = generateAllInteractions(factors, factorNames, strength);
+  const parseCache = new Map<string, InteractionTuple>();
   const result: TestCase[] = [];
 
-  while (uncoveredPairs.size > 0) {
-    const testCase = buildGreedyTestCase(factors, factorNames, uncoveredPairs);
+  while (uncoveredInteractions.size > 0) {
+    const testCase = buildGreedyTestCase(
+      factors,
+      factorNames,
+      uncoveredInteractions,
+      parseCache,
+      options.factorWeights,
+    );
     result.push(testCase);
-    markPairsCovered(testCase, uncoveredPairs, factorNames);
+    markInteractionsCovered(testCase, uncoveredInteractions, factorNames, strength);
   }
 
   return result;
+}
+
+export function generateThreewiseMatrix(
+  factors: FactorValues,
+  options: Omit<PairwiseOptions, "strength"> = {},
+): TestCase[] {
+  return generatePairwiseMatrix(factors, { ...options, strength: 3 });
 }
 
 /**
@@ -268,37 +390,40 @@ export function formatAsTestCases(matrix: TestCase[], expectedField = "expected"
 export function validateCoverage(
   factors: FactorValues,
   matrix: TestCase[],
+  options: PairwiseOptions = {},
 ): {
   valid: boolean;
   missing: string[];
   coverage: number;
 } {
-  const allPairs = generateAllPairs(factors);
-  const coveredPairs = new Set<string>();
-  const factorNames = Object.keys(factors);
+  const strength = options.strength ?? DEFAULT_STRENGTH;
+  if (strength !== 2 && strength !== 3) {
+    throw new Error(`Unsupported coverage strength ${String(strength)}. Supported values: 2 or 3.`);
+  }
+
+  const factorNames = orderFactorsByWeight(Object.keys(factors), options.factorWeights);
+  const allInteractions = generateAllInteractions(factors, factorNames, strength);
+  const coveredInteractions = new Set<string>();
+  const factorCombos = generateCombinations(factorNames, strength);
 
   for (const testCase of matrix) {
-    for (let i = 0; i < factorNames.length; i++) {
-      for (let j = i + 1; j < factorNames.length; j++) {
-        const factorA = factorNames[i];
-        const factorB = factorNames[j];
-        const key = pairKey(factorA, testCase[factorA], factorB, testCase[factorB]);
-        coveredPairs.add(key);
-      }
+    for (const combo of factorCombos) {
+      const interaction: InteractionTuple = combo.map((factor) => [factor, testCase[factor]]);
+      coveredInteractions.add(interactionKey(interaction));
     }
   }
 
   const missing: string[] = [];
-  for (const pair of allPairs) {
-    if (!coveredPairs.has(pair)) {
-      missing.push(pair);
+  for (const interaction of allInteractions) {
+    if (!coveredInteractions.has(interaction)) {
+      missing.push(interaction);
     }
   }
 
   return {
     valid: missing.length === 0,
     missing,
-    coverage: allPairs.size === 0 ? 100 : ((allPairs.size - missing.length) / allPairs.size) * 100,
+    coverage: allInteractions.size === 0 ? 100 : ((allInteractions.size - missing.length) / allInteractions.size) * 100,
   };
 }
 

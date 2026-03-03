@@ -112,6 +112,101 @@ export function testSchemaEvolution<T>(schema: ZodLikeSchema<T>, oldInput: unkno
   }
 }
 
+export interface VersionedSchemaCase<T = unknown> {
+  version: string;
+  schema: ZodLikeSchema<T>;
+  fixtures: unknown[];
+}
+
+export interface VersionCompatibilityCell {
+  fromVersion: string;
+  toVersion: string;
+  compatible: boolean;
+  passed: number;
+  total: number;
+  failures: Array<{
+    fixtureIndex: number;
+    issues: ZodIssue[];
+  }>;
+}
+
+/**
+ * Build a version compatibility matrix by testing each version's fixtures
+ * against every schema version in the provided sequence.
+ */
+export function generateVersionCompatibilityMatrix(versions: VersionedSchemaCase[]): VersionCompatibilityCell[] {
+  const cells: VersionCompatibilityCell[] = [];
+
+  for (const from of versions) {
+    for (const to of versions) {
+      const failures: VersionCompatibilityCell["failures"] = [];
+      let passed = 0;
+
+      from.fixtures.forEach((fixture, fixtureIndex) => {
+        const result = to.schema.safeParse(fixture);
+        if (result.success) {
+          passed++;
+          return;
+        }
+        failures.push({
+          fixtureIndex,
+          issues: result.error.issues,
+        });
+      });
+
+      cells.push({
+        fromVersion: from.version,
+        toVersion: to.version,
+        compatible: failures.length === 0,
+        passed,
+        total: from.fixtures.length,
+        failures,
+      });
+    }
+  }
+
+  return cells;
+}
+
+/**
+ * Assert backward compatibility across version jumps.
+ *
+ * For each from-version, newer schemas up to `maxForwardDistance` must parse
+ * all fixtures emitted by that from-version.
+ */
+export function assertVersionCompatibility(
+  versions: VersionedSchemaCase[],
+  maxForwardDistance = Number.POSITIVE_INFINITY,
+): VersionCompatibilityCell[] {
+  const matrix = generateVersionCompatibilityMatrix(versions);
+  const versionIndex = new Map(versions.map((version, idx) => [version.version, idx]));
+
+  const failures = matrix.filter((cell) => {
+    const fromIndex = versionIndex.get(cell.fromVersion);
+    const toIndex = versionIndex.get(cell.toVersion);
+    if (fromIndex === undefined || toIndex === undefined) return false;
+    const forwardDistance = toIndex - fromIndex;
+    return forwardDistance > 0 && forwardDistance <= maxForwardDistance && !cell.compatible;
+  });
+
+  if (failures.length > 0) {
+    const details = failures
+      .map((failure) => {
+        const issueDetails = failure.failures
+          .map((entry) => {
+            const issueText = entry.issues.map((issue) => `[${issue.path.join(".")}] ${issue.message}`).join("; ");
+            return `fixture #${entry.fixtureIndex}: ${issueText}`;
+          })
+          .join(" | ");
+        return `${failure.fromVersion} -> ${failure.toVersion}: ${issueDetails}`;
+      })
+      .join("\n");
+    throw new Error(`Version compatibility failed:\n${details}`);
+  }
+
+  return matrix;
+}
+
 // ============================================================================
 // REFINEMENT TESTING
 // ============================================================================

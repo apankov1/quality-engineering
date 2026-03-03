@@ -39,6 +39,13 @@ import {
 } from './resilience.ts';
 ```
 
+`getBackoffDelay()` accepts an optional RNG function for deterministic tests:
+
+```typescript
+const lowJitter = getBackoffDelay(0, 1000, 30000, () => 0); // 750
+const highJitter = getBackoffDelay(0, 1000, 30000, () => 1); // 1250
+```
+
 ## Quick Reference
 
 | Pattern | Detect | Fix | Severity |

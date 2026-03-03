@@ -61,7 +61,7 @@ const cb = new CircuitBreaker({
   failureThreshold: 3,    // Open after 3 failures
   resetTimeout: 30000,    // Try half-open after 30s
   successThreshold: 2,    // Require 2 successes to close
-});
+}, Date.now);
 
 // Usage
 if (!cb.canExecute()) {
@@ -121,6 +121,16 @@ describe('circuit breaker', () => {
 });
 ```
 
+Use a fake clock in tests (no `setTimeout()` flake):
+
+```typescript
+let now = 0;
+const cb = new CircuitBreaker({ failureThreshold: 1, resetTimeout: 50 }, () => now);
+cb.recordFailure();
+now = 60;
+expect(cb.getState()).toBe('half-open');
+```
+
 ### Step 4: Implement Retry Policy with Backoff
 
 Exponential backoff with jitter prevents thundering herd:
@@ -131,10 +141,17 @@ const policy = new RetryPolicy({
   baseDelay: 100,
   maxDelay: 30000,
   jitterFactor: 0.1,  // ±10% randomization
-});
+}, Math.random);
 
 // Get delay for attempt N (0-indexed)
 const delay = policy.getDelay(2);  // ~400ms ± jitter
+```
+
+Inject deterministic RNG for stable tests:
+
+```typescript
+const low = new RetryPolicy({ maxRetries: 3, baseDelay: 1000, jitterFactor: 0.1 }, () => 0);
+const high = new RetryPolicy({ maxRetries: 3, baseDelay: 1000, jitterFactor: 0.1 }, () => 1);
 ```
 
 ### Step 5: Test Backoff Calculations

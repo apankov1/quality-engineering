@@ -39,10 +39,20 @@ Combinatorial testing that covers all factor pairs in near-minimal test cases.
 
 ```typescript
 // Pairwise matrix generator (zero dependencies)
-import { generatePairwiseMatrix, formatAsMarkdownTable } from './pairwise.ts';
+import { generatePairwiseMatrix, generateThreewiseMatrix, formatAsMarkdownTable } from './pairwise.ts';
 
 // Pairwise test case helpers
 import { createPairwiseTestCases, generateTestCaseName } from './test-fixtures.ts';
+```
+
+```typescript
+// 3-wise coverage for critical paths (slower than pairwise)
+const matrix3 = generatePairwiseMatrix(factors, { strength: 3 });
+
+// Weighted scoring prioritizes high-risk factors
+const weighted = generatePairwiseMatrix(factors, {
+  factorWeights: { auth: 10, region: 4 },
+});
 ```
 
 ## Performance and Limits
@@ -56,6 +66,8 @@ The greedy algorithm never enumerates the Cartesian product. Pair count grows as
 | 8 | 8 | 16,777,216 | ~100 | ~10ms |
 
 **Hard limits** (throws if exceeded): max 20 factors, max 50 values per factor. Beyond these, pair count exceeds ~475K (C(20,2) × 50²) and in-memory generation becomes impractical.
+
+For `strength: 3`, interaction growth is much faster. Use only for focused high-risk matrices (typically <= 6 factors with low cardinality).
 
 ## Violation Rules
 

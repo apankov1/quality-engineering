@@ -70,13 +70,14 @@ describe("CircuitBreaker", () => {
 
   describe("open -> half-open transition", () => {
     // Defect: Circuit must transition to half-open after timeout
-    it("transitions to half-open after reset timeout", async () => {
-      const cb = new CircuitBreaker({ failureThreshold: 1, resetTimeout: 50 });
+    it("transitions to half-open after reset timeout", () => {
+      let now = 0;
+      const cb = new CircuitBreaker({ failureThreshold: 1, resetTimeout: 50 }, () => now);
 
       cb.recordFailure();
       assert.equal(cb.getState(), "open");
 
-      await new Promise((r) => setTimeout(r, 60));
+      now = 60;
       assert.equal(cb.getState(), "half-open");
       assert.equal(cb.canExecute(), true);
     });
@@ -84,11 +85,12 @@ describe("CircuitBreaker", () => {
 
   describe("half-open -> closed transition", () => {
     // Defect: Success in half-open must close circuit
-    it("closes on success in half-open", async () => {
-      const cb = new CircuitBreaker({ failureThreshold: 1, resetTimeout: 10 });
+    it("closes on success in half-open", () => {
+      let now = 0;
+      const cb = new CircuitBreaker({ failureThreshold: 1, resetTimeout: 10 }, () => now);
 
       cb.recordFailure();
-      await new Promise((r) => setTimeout(r, 20));
+      now = 20;
       assert.equal(cb.getState(), "half-open");
 
       cb.recordSuccess();
@@ -96,11 +98,12 @@ describe("CircuitBreaker", () => {
     });
 
     // Defect: Multiple successes required if successThreshold > 1
-    it("requires successThreshold successes to close", async () => {
-      const cb = new CircuitBreaker({ failureThreshold: 1, resetTimeout: 10, successThreshold: 2 });
+    it("requires successThreshold successes to close", () => {
+      let now = 0;
+      const cb = new CircuitBreaker({ failureThreshold: 1, resetTimeout: 10, successThreshold: 2 }, () => now);
 
       cb.recordFailure();
-      await new Promise((r) => setTimeout(r, 20));
+      now = 20;
 
       cb.recordSuccess();
       assert.equal(cb.getState(), "half-open"); // Still half-open
@@ -112,11 +115,12 @@ describe("CircuitBreaker", () => {
 
   describe("half-open -> open transition", () => {
     // Defect: Any failure in half-open must reopen circuit
-    it("reopens on failure in half-open", async () => {
-      const cb = new CircuitBreaker({ failureThreshold: 1, resetTimeout: 10 });
+    it("reopens on failure in half-open", () => {
+      let now = 0;
+      const cb = new CircuitBreaker({ failureThreshold: 1, resetTimeout: 10 }, () => now);
 
       cb.recordFailure();
-      await new Promise((r) => setTimeout(r, 20));
+      now = 20;
       assert.equal(cb.getState(), "half-open");
 
       cb.recordFailure();
@@ -186,6 +190,32 @@ describe("RetryPolicy", () => {
         assert.ok(delay >= 900, `delay ${delay} should be >= 900`);
         assert.ok(delay <= 1100, `delay ${delay} should be <= 1100`);
       }
+    });
+
+    it("supports deterministic RNG injection", () => {
+      const lowPolicy = new RetryPolicy({ maxRetries: 5, baseDelay: 1000, jitterFactor: 0.1 }, () => 0);
+      const highPolicy = new RetryPolicy({ maxRetries: 5, baseDelay: 1000, jitterFactor: 0.1 }, () => 1);
+
+      assert.equal(lowPolicy.getDelay(0), 900);
+      assert.equal(highPolicy.getDelay(0), 1100);
+    });
+
+    // Defect: Malformed RNG returning out-of-range values must be clamped
+    it("clamps RNG output to [0, 1]", () => {
+      const negativeRng = new RetryPolicy({ maxRetries: 5, baseDelay: 1000, jitterFactor: 0.1 }, () => -1);
+      const overRng = new RetryPolicy({ maxRetries: 5, baseDelay: 1000, jitterFactor: 0.1 }, () => 2);
+
+      assert.equal(negativeRng.getDelay(0), 900);  // clamped to 0 => -10% jitter
+      assert.equal(overRng.getDelay(0), 1100);      // clamped to 1 => +10% jitter
+    });
+
+    // Defect: NaN or Infinity RNG must fall back to midpoint (0.5)
+    it("falls back to midpoint for non-finite RNG values", () => {
+      const nanRng = new RetryPolicy({ maxRetries: 5, baseDelay: 1000, jitterFactor: 0.1 }, () => Number.NaN);
+      const infRng = new RetryPolicy({ maxRetries: 5, baseDelay: 1000, jitterFactor: 0.1 }, () => Number.POSITIVE_INFINITY);
+
+      assert.equal(nanRng.getDelay(0), 1000);  // 0.5 => zero jitter
+      assert.equal(infRng.getDelay(0), 1000);   // 0.5 => zero jitter
     });
   });
 

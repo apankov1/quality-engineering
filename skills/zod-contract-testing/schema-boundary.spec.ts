@@ -2,8 +2,10 @@ import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import {
   applyCompoundState,
+  assertVersionCompatibility,
   formatStateMatrix,
   generateCompoundStateMatrix,
+  generateVersionCompatibilityMatrix,
   testInvalidInput,
   testRefinement,
   testSchemaEvolution,
@@ -177,6 +179,60 @@ describe("testSchemaEvolution", () => {
     const oldData = { name: "Alice" }; // No age field
 
     assert.throws(() => testSchemaEvolution(newSchema, oldData), /Schema evolution failed.*Required field missing/s);
+  });
+});
+
+describe("version compatibility matrix", () => {
+  const versions = [
+    {
+      version: "v1",
+      schema: createObjectSchema({ name: "string" }),
+      fixtures: [{ name: "Alice" }],
+    },
+    {
+      version: "v2",
+      schema: createObjectSchema({ name: "string", email: "optional" }),
+      fixtures: [{ name: "Bob", email: "bob@example.com" }],
+    },
+    {
+      version: "v3",
+      schema: createObjectSchema({ name: "string", email: "string" }),
+      fixtures: [{ name: "Cara", email: "cara@example.com" }],
+    },
+  ] satisfies Array<{ version: string; schema: ZodLikeSchema<unknown>; fixtures: unknown[] }>;
+
+  it("builds matrix cells for every version pair", () => {
+    const matrix = generateVersionCompatibilityMatrix(versions);
+    assert.equal(matrix.length, 9); // 3 x 3
+    const v1ToV3 = matrix.find((cell) => cell.fromVersion === "v1" && cell.toVersion === "v3");
+    assert.ok(v1ToV3);
+    assert.equal(v1ToV3.compatible, false);
+  });
+
+  it("validates vN -> vN+1 compatibility", () => {
+    assert.doesNotThrow(() => assertVersionCompatibility(versions, 1));
+  });
+
+  it("detects vN -> vN+2 compatibility breaks", () => {
+    assert.throws(() => assertVersionCompatibility(versions, 2), /Version compatibility failed/);
+  });
+
+  it("maxForwardDistance=0 passes trivially (no forward pairs checked)", () => {
+    assert.doesNotThrow(() => assertVersionCompatibility(versions, 0));
+  });
+
+  it("single version produces a 1x1 matrix with compatible=true", () => {
+    const single = [versions[0]];
+    const matrix = generateVersionCompatibilityMatrix(single);
+    assert.equal(matrix.length, 1);
+    assert.equal(matrix[0].fromVersion, "v1");
+    assert.equal(matrix[0].toVersion, "v1");
+    assert.equal(matrix[0].compatible, true);
+  });
+
+  it("empty versions array produces an empty matrix", () => {
+    const matrix = generateVersionCompatibilityMatrix([]);
+    assert.equal(matrix.length, 0);
   });
 });
 

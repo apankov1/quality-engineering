@@ -26,7 +26,14 @@ Detects breaking changes that could disrupt active sessions or lose client compa
 
 ```typescript
 // Breaking change classification (zero dependencies)
-import { classifyFieldChange, classifySerializedSchema, classifyEventTypeChanges } from './breaking-change.ts';
+import {
+  classifyFieldChange,
+  classifySerializedSchema,
+  classifyEventTypeChanges,
+  classifyStatusCodeChanges,
+  classifyEnumValueChanges,
+  classifyApiFieldSemantics,
+} from './breaking-change.ts';
 ```
 
 ## Backward Compatibility Checklist
@@ -60,7 +67,7 @@ When modifying contracts or schemas:
 |----------|---------|--------|
 | 1. Contract fields | `classifyFieldChange()` | Code + tests |
 | 2. Database schema | -- | Doc-only (requires SQL diffing) |
-| 3. RPC/API endpoints | -- | Doc-only (requires OpenAPI diffing) |
+| 3. RPC/API endpoints | `classifyStatusCodeChanges()`, `classifyEnumValueChanges()`, `classifyApiFieldSemantics()` | Code + tests (API-level diff helpers) |
 | 4. WebSocket protocol | -- | Doc-only (requires message schema diffing) |
 | 5. Serialized state | `classifySerializedSchema()` | Code + tests |
 | 6. Event sourcing | `classifyEventTypeChanges()` | Code + tests |

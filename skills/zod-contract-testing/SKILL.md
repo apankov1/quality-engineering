@@ -31,6 +31,8 @@ import {
   testValidInput,
   testInvalidInput,
   testSchemaEvolution,
+  generateVersionCompatibilityMatrix,
+  assertVersionCompatibility,
   testRefinement,
   generateCompoundStateMatrix,
   formatStateMatrix,
@@ -77,7 +79,7 @@ it('rejects unknown fields with strict schema', () => {
 });
 ```
 
-### Step 3: Test Schema Evolution
+### Step 3a: Test Schema Evolution
 
 When schemas change, old serialized data must still parse:
 
@@ -94,6 +96,26 @@ it('backward compatible with old data', () => {
   const oldData = { name: 'Alice' };  // No email field
   testSchemaEvolution(NewUserSchema, oldData);
 });
+```
+
+### Step 3b: Build Version Compatibility Matrix
+
+For evolving contracts, check `vN -> vN+1` and `vN -> vN+2` explicitly:
+
+```typescript
+const versions = [
+  { version: 'v1', schema: V1Schema, fixtures: [v1Payload] },
+  { version: 'v2', schema: V2Schema, fixtures: [v2Payload] },
+  { version: 'v3', schema: V3Schema, fixtures: [v3Payload] },
+];
+
+const matrix = generateVersionCompatibilityMatrix(versions);
+
+// Enforce only adjacent upgrades (vN -> vN+1)
+assertVersionCompatibility(versions, 1);
+
+// Optionally enforce two-hop upgrades (vN -> vN+2)
+assertVersionCompatibility(versions, 2);
 ```
 
 ### Step 4: Test Refinements
@@ -228,6 +250,8 @@ This skill teaches **testing methodology**, not Zod API usage. For broader metho
 | `testValidInput` | Verify acceptance | `testValidInput(schema, { name: 'Alice' })` |
 | `testInvalidInput` | Verify rejection | `testInvalidInput(schema, {}, 'name')` |
 | `testSchemaEvolution` | Backward compat | `testSchemaEvolution(newSchema, oldData)` |
+| `generateVersionCompatibilityMatrix` | Version matrix | `generateVersionCompatibilityMatrix(versions)` |
+| `assertVersionCompatibility` | Enforce vN->vN+K | `assertVersionCompatibility(versions, 2)` |
 | `testRefinement` | Pass + fail | `testRefinement(schema, passing, failing, message)` |
 | `generateCompoundStateMatrix` | Optional fields | `generateCompoundStateMatrix(['a', 'b', 'c'])` |
 | `applyCompoundState` | Generate input | `applyCompoundState(entry, template)` |

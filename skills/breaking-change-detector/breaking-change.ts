@@ -32,6 +32,31 @@ export interface EventTypeChangeResult {
   safe: boolean;
 }
 
+export interface StatusCodeChangeResult {
+  removed: number[];
+  added: number[];
+  safe: boolean;
+}
+
+export interface EnumValueChangeResult {
+  removed: string[];
+  added: string[];
+  safe: boolean;
+}
+
+export interface ApiFieldDefinition {
+  name: string;
+  type: string;
+  required?: boolean;
+  semantic?: string;
+}
+
+export interface ApiFieldSemanticsResult {
+  safe: boolean;
+  breaking: string[];
+  added: string[];
+}
+
 // --- Classification functions ---
 
 /**
@@ -92,4 +117,84 @@ export function classifyEventTypeChanges(oldTypes: string[], newTypes: string[])
   const removed = oldTypes.filter((t) => !newSet.has(t));
   const added = newTypes.filter((t) => !oldSet.has(t));
   return { removed, added, safe: removed.length === 0 };
+}
+
+/**
+ * Compare HTTP status codes for an endpoint version.
+ *
+ * Removing a status code is treated as breaking because clients may
+ * rely on that response contract.
+ */
+export function classifyStatusCodeChanges(oldStatuses: number[], newStatuses: number[]): StatusCodeChangeResult {
+  const oldSet = new Set(oldStatuses);
+  const newSet = new Set(newStatuses);
+  const removed = oldStatuses.filter((code) => !newSet.has(code));
+  const added = newStatuses.filter((code) => !oldSet.has(code));
+  return { removed, added, safe: removed.length === 0 };
+}
+
+/**
+ * Compare enum values for API contracts.
+ *
+ * Removing enum values is breaking. Adding values is safe for tolerant readers.
+ */
+export function classifyEnumValueChanges(oldValues: string[], newValues: string[]): EnumValueChangeResult {
+  const oldSet = new Set(oldValues);
+  const newSet = new Set(newValues);
+  const removed = oldValues.filter((value) => !newSet.has(value));
+  const added = newValues.filter((value) => !oldSet.has(value));
+  return { removed, added, safe: removed.length === 0 };
+}
+
+/**
+ * Compare API field definitions for semantic compatibility.
+ *
+ * Breaking conditions:
+ * - field removed
+ * - field type changed
+ * - optional field made required
+ * - documented semantic meaning changed
+ * - newly introduced required field
+ */
+export function classifyApiFieldSemantics(
+  oldFields: ApiFieldDefinition[],
+  newFields: ApiFieldDefinition[],
+): ApiFieldSemanticsResult {
+  const oldByName = new Map(oldFields.map((field) => [field.name, field]));
+  const newByName = new Map(newFields.map((field) => [field.name, field]));
+
+  const breaking: string[] = [];
+  const added: string[] = [];
+
+  for (const oldField of oldFields) {
+    const updatedField = newByName.get(oldField.name);
+    if (!updatedField) {
+      breaking.push(`${oldField.name}: removed`);
+      continue;
+    }
+    if (oldField.type !== updatedField.type) {
+      breaking.push(`${oldField.name}: type changed from ${oldField.type} to ${updatedField.type}`);
+    }
+    if (!oldField.required && updatedField.required) {
+      breaking.push(`${oldField.name}: made required`);
+    }
+    if (oldField.semantic && updatedField.semantic && oldField.semantic !== updatedField.semantic) {
+      breaking.push(`${oldField.name}: semantic changed`);
+    }
+  }
+
+  for (const newField of newFields) {
+    if (oldByName.has(newField.name)) continue;
+    if (newField.required) {
+      breaking.push(`${newField.name}: new required field`);
+    } else {
+      added.push(newField.name);
+    }
+  }
+
+  return {
+    safe: breaking.length === 0,
+    breaking,
+    added,
+  };
 }
