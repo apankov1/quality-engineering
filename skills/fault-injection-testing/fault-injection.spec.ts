@@ -205,17 +205,20 @@ describe("RetryPolicy", () => {
       const negativeRng = new RetryPolicy({ maxRetries: 5, baseDelay: 1000, jitterFactor: 0.1 }, () => -1);
       const overRng = new RetryPolicy({ maxRetries: 5, baseDelay: 1000, jitterFactor: 0.1 }, () => 2);
 
-      assert.equal(negativeRng.getDelay(0), 900);  // clamped to 0 => -10% jitter
-      assert.equal(overRng.getDelay(0), 1100);      // clamped to 1 => +10% jitter
+      assert.equal(negativeRng.getDelay(0), 900); // clamped to 0 => -10% jitter
+      assert.equal(overRng.getDelay(0), 1100); // clamped to 1 => +10% jitter
     });
 
     // Defect: NaN or Infinity RNG must fall back to midpoint (0.5)
     it("falls back to midpoint for non-finite RNG values", () => {
       const nanRng = new RetryPolicy({ maxRetries: 5, baseDelay: 1000, jitterFactor: 0.1 }, () => Number.NaN);
-      const infRng = new RetryPolicy({ maxRetries: 5, baseDelay: 1000, jitterFactor: 0.1 }, () => Number.POSITIVE_INFINITY);
+      const infRng = new RetryPolicy(
+        { maxRetries: 5, baseDelay: 1000, jitterFactor: 0.1 },
+        () => Number.POSITIVE_INFINITY,
+      );
 
-      assert.equal(nanRng.getDelay(0), 1000);  // 0.5 => zero jitter
-      assert.equal(infRng.getDelay(0), 1000);   // 0.5 => zero jitter
+      assert.equal(nanRng.getDelay(0), 1000); // 0.5 => zero jitter
+      assert.equal(infRng.getDelay(0), 1000); // 0.5 => zero jitter
     });
   });
 
