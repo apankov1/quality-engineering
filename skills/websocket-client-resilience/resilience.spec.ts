@@ -51,6 +51,14 @@ describe("backoff with jitter (pattern 1)", () => {
       assert.ok(getBackoffDelay(i, 1000, 30000) >= 0);
     }
   });
+
+  it("returns 0 for negative attempts", () => {
+    assert.equal(getBackoffDelay(-1, 1000, 30000), 0);
+  });
+
+  it("returns 0 for non-finite attempts", () => {
+    assert.equal(getBackoffDelay(Number.NaN, 1000, 30000), 0);
+  });
 });
 
 describe("circuit breaker (pattern 2)", () => {

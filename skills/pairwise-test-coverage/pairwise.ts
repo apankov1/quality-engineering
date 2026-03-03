@@ -24,27 +24,37 @@
  * // Returns ~9 test cases covering all pairs (vs 27 exhaustive)
  */
 
+import { pathToFileURL } from "node:url";
+
 export type FactorValues = Record<string, string[]>;
 export type TestCase = Record<string, string>;
+type PairTuple = [string, string, string, string];
 
 /**
  * Create a canonical key for a pair
  */
 function pairKey(factorA: string, valueA: string, factorB: string, valueB: string): string {
-  if (factorA < factorB) {
-    return `${factorA}:${valueA}|${factorB}:${valueB}`;
-  }
-  return `${factorB}:${valueB}|${factorA}:${valueA}`;
+  const tuple: PairTuple = factorA < factorB ? [factorA, valueA, factorB, valueB] : [factorB, valueB, factorA, valueA];
+  return JSON.stringify(tuple);
 }
 
 /**
  * Parse a pair key back into its components
  */
 function parsePairKey(key: string): [string, string, string, string] {
-  const [left, right] = key.split("|");
-  const [factorA, valueA] = left.split(":");
-  const [factorB, valueB] = right.split(":");
-  return [factorA, valueA, factorB, valueB];
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(key);
+  } catch (error) {
+    const msg = error instanceof Error ? error.message : String(error);
+    throw new Error(`Invalid pair key: ${msg}`);
+  }
+
+  if (!Array.isArray(parsed) || parsed.length !== 4 || parsed.some((p) => typeof p !== "string")) {
+    throw new Error("Invalid pair key shape");
+  }
+
+  return parsed as PairTuple;
 }
 
 /**
@@ -288,12 +298,11 @@ export function validateCoverage(
   return {
     valid: missing.length === 0,
     missing,
-    coverage: ((allPairs.size - missing.length) / allPairs.size) * 100,
+    coverage: allPairs.size === 0 ? 100 : ((allPairs.size - missing.length) / allPairs.size) * 100,
   };
 }
 
-// CLI usage
-if (typeof process !== "undefined" && process.argv?.[1]?.includes("pairwise")) {
+export function runPairwiseCliDemo(): void {
   const compatibilityFactors = {
     browser: ["chrome", "firefox", "safari"],
     os: ["windows", "macos", "linux"],
@@ -327,4 +336,9 @@ if (typeof process !== "undefined" && process.argv?.[1]?.includes("pairwise")) {
   console.log(`Coverage: ${stressValidation.coverage.toFixed(1)}%`);
   console.log(`Valid: ${stressValidation.valid}`);
   console.log(`Time: ${elapsed.toFixed(1)}ms`);
+}
+
+// CLI usage
+if (typeof process !== "undefined" && process.argv?.[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
+  runPairwiseCliDemo();
 }

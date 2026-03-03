@@ -287,6 +287,11 @@ describe("generateCompoundStateMatrix", () => {
     const indices = matrix.map((e) => e.index).sort((a, b) => a - b);
     assert.deepEqual(indices, [0, 1, 2, 3]);
   });
+
+  it("throws when field count exceeds safety limit", () => {
+    const fields = Array.from({ length: 17 }, (_, i) => `f${i}`);
+    assert.throws(() => generateCompoundStateMatrix(fields), /Too many optional fields/);
+  });
 });
 
 describe("formatStateMatrix", () => {

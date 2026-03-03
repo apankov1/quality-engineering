@@ -31,7 +31,12 @@ export interface SequenceGapResult {
  * - Never returns negative
  */
 export function getBackoffDelay(attempt: number, baseMs = 1000, maxMs = 30000): number {
-  const exponential = Math.min(baseMs * 2 ** attempt, maxMs);
+  if (!Number.isFinite(attempt) || attempt < 0) return 0;
+  if (!Number.isFinite(baseMs) || !Number.isFinite(maxMs)) return 0;
+
+  const safeBase = Math.max(0, baseMs);
+  const safeMax = Math.max(0, maxMs);
+  const exponential = Math.min(safeBase * 2 ** attempt, safeMax);
   const jitter = exponential * 0.25 * (Math.random() * 2 - 1);
   return Math.max(0, exponential + jitter);
 }

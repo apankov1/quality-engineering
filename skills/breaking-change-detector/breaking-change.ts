@@ -55,6 +55,8 @@ export function classifyFieldChange(change: FieldChange): ChangeKind {
     case "widen":
     case "make_optional":
       return "safe";
+    default:
+      throw new Error(`Unknown field change action: ${String(change.action)}`);
   }
 }
 

@@ -167,6 +167,8 @@ export interface CompoundStateEntry {
   index: number;
 }
 
+const MAX_COMPOUND_FIELDS = 16;
+
 /**
  * Generate all 2^N combinations of optional field presence.
  *
@@ -184,6 +186,11 @@ export interface CompoundStateEntry {
  */
 export function generateCompoundStateMatrix(fieldNames: string[]): CompoundStateEntry[] {
   const n = fieldNames.length;
+  if (n > MAX_COMPOUND_FIELDS) {
+    throw new Error(
+      `Too many optional fields (${n}). Maximum is ${MAX_COMPOUND_FIELDS} to avoid runaway 2^N matrix size.`,
+    );
+  }
   const count = 2 ** n;
   const entries: CompoundStateEntry[] = [];
 

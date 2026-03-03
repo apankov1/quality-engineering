@@ -77,6 +77,18 @@ describe("generatePairwiseMatrix", () => {
       assert.deepStrictEqual(Object.keys(row).sort(), ["a", "b", "c"]);
     }
   });
+
+  it("handles factor names and values containing delimiters", () => {
+    const factors = {
+      "a|f": ["x:y", "z|w"],
+      "b:f": ["u|v", "n:m"],
+      plain: ["left:right", "center|pipe"],
+    };
+    const matrix = generatePairwiseMatrix(factors);
+    const validation = validateCoverage(factors, matrix);
+    assert.equal(validation.valid, true);
+    assert.equal(validation.coverage, 100);
+  });
 });
 
 describe("validateCoverage", () => {
@@ -87,6 +99,16 @@ describe("validateCoverage", () => {
     assert.equal(validation.valid, false);
     assert.ok(validation.missing.length > 0);
     assert.ok(validation.coverage < 100);
+  });
+
+  it("returns 100% coverage for zero or one factor", () => {
+    const zero = validateCoverage({}, []);
+    assert.equal(zero.valid, true);
+    assert.equal(zero.coverage, 100);
+
+    const one = validateCoverage({ only: ["x"] }, [{ only: "x" }]);
+    assert.equal(one.valid, true);
+    assert.equal(one.coverage, 100);
   });
 });
 

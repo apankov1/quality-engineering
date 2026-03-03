@@ -53,6 +53,11 @@ describe("contract field changes (category 1)", () => {
   it("making required is breaking", () => {
     assert.equal(classifyFieldChange({ action: "make_required" }), "breaking");
   });
+
+  it("throws on unknown action", () => {
+    const invalidChange = { action: "unknown" } as unknown as Parameters<typeof classifyFieldChange>[0];
+    assert.throws(() => classifyFieldChange(invalidChange), /Unknown field change action/);
+  });
 });
 
 describe("serialized state schema (category 5)", () => {
