@@ -1,6 +1,6 @@
 ---
 name: zod-contract-testing
-description: Validates Zod schema parsing at boundaries. Tests valid/invalid inputs, schema evolution, refinement coverage, and compound state matrices (2^N optional field combinations).
+description: "Validates Zod schema parsing at boundaries. Tests valid/invalid inputs, schema evolution, refinement coverage, and compound state matrices (2^N optional field combinations)."
 ---
 
 # Zod Contract Testing
