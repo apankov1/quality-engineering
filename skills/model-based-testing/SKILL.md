@@ -13,6 +13,18 @@ State machines are everywhere: workflow states, lifecycle management, game turns
 
 **When not to use**: Stateless functions, simple CRUD, UI rendering without state machines, pure data transformations.
 
+## Model-Based vs Pairwise
+
+Model-based derives **which state transitions** to test. [Pairwise testing](https://github.com/apankov1/quality-engineering/tree/main/skills/pairwise-test-coverage) selects **which input combinations** to test. Different questions, different tools:
+
+| Your system has... | Use | Example |
+|--------------------|-----|---------|
+| Named states with transitions between them | **Model-based** | draft → review → published workflow |
+| Independent parameters with discrete values | **Pairwise** | retry count × timeout × backoff × status |
+| State machine guards with 5+ boolean inputs | **Both** | Model-based finds the guards, pairwise covers the flag combos |
+
+**Rule of thumb**: if you're testing *what happens next*, use model-based. If you're testing *what goes in*, use pairwise.
+
 ## Rationalizations (Do Not Skip)
 
 | Rationalization | Why It's Wrong | Required Action |

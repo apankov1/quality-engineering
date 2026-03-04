@@ -11,6 +11,18 @@ Combinatorial testing that covers all factor pairs in near-minimal test cases.
 
 **When not to use**: Single-factor tests (just test each value), two-factor systems (test all combinations directly), UI snapshot tests, type-only changes.
 
+## Pairwise vs Model-Based
+
+Pairwise selects **which input combinations** to test. [Model-based testing](https://github.com/apankov1/quality-engineering/tree/main/skills/model-based-testing) derives **which state transitions** to test. Different questions, different tools:
+
+| Your system has... | Use | Example |
+|--------------------|-----|---------|
+| Independent parameters with discrete values | **Pairwise** | OS × browser × locale config matrix |
+| Named states with transitions between them | **Model-based** | draft → review → published workflow |
+| State machine guards with 5+ boolean inputs | **Both** | Model-based finds the guards, pairwise covers the flag combos |
+
+**Rule of thumb**: if you're testing *what goes in*, use pairwise. If you're testing *what happens next*, use model-based.
+
 ## Core Philosophy
 
 **Exhaustive testing doesn't scale.** If a system has 4 factors with 3 values each, that's 81 test cases. Pairwise testing covers all pair interactions in ~12 cases -- an 85% reduction with near-complete defect detection.
@@ -24,16 +36,6 @@ Combinatorial testing that covers all factor pairs in near-minimal test cases.
 | "The test passes, so the code works" | Test must FAIL before the fix to prove it catches the bug | Validate detection first |
 
 ---
-
-## Quick Reference
-
-| Technique | Use When | Key Pattern |
-|-----------|----------|-------------|
-| **Pairwise Matrix** | Multiple factors with discrete values | `it.each(cases)` table-driven |
-| **Property-Based** | Value ranges, type safety invariants | `fc.assert(fc.property(...))` |
-| **Model-Based** | State machine transitions | Transition table tests |
-| **Fault Injection** | Storage/network failures | Mock rejection scenarios |
-| **Contract Tests** | Schema validation at boundaries | `Schema.safeParse()` assertions |
 
 ## Included Utilities
 
