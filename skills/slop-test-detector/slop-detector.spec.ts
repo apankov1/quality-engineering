@@ -9,11 +9,14 @@ import {
   checkAssertOnTypeNotValue,
   checkAssertReturnTypeOnly,
   checkCommentedOutAssertions,
+  checkConditionalAssertion,
   checkDuplicateAssertionSet,
   checkEmptyTestBody,
+  checkLiteralRoundtrip,
   checkMissingDefectComment,
   checkNoInputVariation,
   checkNoNegativeTest,
+  checkSchemaSuccessOnly,
   checkSelfReferentialAssertion,
   checkTautologicalAssertion,
   checkTrivialDefectComment,
@@ -1068,15 +1071,15 @@ describe("getPreset", () => {
   });
 
   // Defect: if strict preset misses any rule, teams opting in to full enforcement still have blind spots.
-  it("strict preset includes all 12 rules", () => {
+  it("strict preset includes all 15 rules", () => {
     const config = getPreset("strict");
-    assert.equal(config.enabledRules.size, 12);
+    assert.equal(config.enabledRules.size, 15);
   });
 
   // Defect: if advisory preset doesn't include all rules, teams lose visibility into patterns they haven't opted into enforcing.
   it("advisory preset includes all rules with zero threshold", () => {
     const config = getPreset("advisory");
-    assert.equal(config.enabledRules.size, 12);
+    assert.equal(config.enabledRules.size, 15);
     assert.equal(config.scoreThreshold, 0);
   });
 });
@@ -1250,6 +1253,280 @@ describe("validateTestBlock", () => {
     const findings = validateTestBlock(source);
     const mustFails = findings.filter((f) => f.severity === "must-fail");
     assert.equal(mustFails.length, 0);
+  });
+});
+
+// ============================================================================
+// NEW RULES: literal_roundtrip, schema_success_only, conditional_assertion
+// ============================================================================
+
+describe("checkLiteralRoundtrip", () => {
+  // slop-ignore: no_negative_test, duplicate_assertion_set, no_input_variation — rule-unit tests intentionally reuse assertion shapes.
+
+  // Defect: if literal_roundtrip doesn't fire when a test constructs an object and asserts the same literals back, agents generate tests that verify their own setup — catching zero production bugs.
+  it("fires when test asserts same literal used to construct object", () => {
+    const source = [
+      'describe("X", () => {',
+      '  it("roundtrip", () => {',
+      "    const block = {",
+      "      type: 'image',",
+      "      layout: 'full',",
+      "    };",
+      "    assert.equal(block.type, 'image');",
+      "    assert.equal(block.layout, 'full');",
+      "  });",
+      "});",
+    ].join("\n");
+
+    const { allTests } = parseTestFile(source);
+    const findings = checkLiteralRoundtrip(allTests[0]);
+    assert.equal(findings.length, 2);
+    assert.equal(findings[0].rule, "literal_roundtrip");
+  });
+
+  // Defect: if literal_roundtrip fires on assertions comparing to different values than construction, it false-positives on tests that verify computed changes.
+  it("does not fire when asserted value differs from constructed value", () => {
+    const source = [
+      'describe("X", () => {',
+      '  it("transformed", () => {',
+      "    const block = {",
+      "      type: 'image',",
+      "      layout: 'full',",
+      "    };",
+      "    const result = transform(block);",
+      "    assert.equal(result.type, 'transformed');",
+      "  });",
+      "});",
+    ].join("\n");
+
+    const { allTests } = parseTestFile(source);
+    const findings = checkLiteralRoundtrip(allTests[0]);
+    assert.equal(findings.length, 0);
+  });
+
+  // Defect: if literal_roundtrip fires when a production function is called between construction and assertion, it false-positives on legitimate integration tests.
+  it("does not fire when field is not from a literal construction", () => {
+    const source = [
+      'describe("X", () => {',
+      '  it("api result", () => {',
+      "    const result = fetchData();",
+      "    assert.equal(result.type, 'image');",
+      "  });",
+      "});",
+    ].join("\n");
+
+    const { allTests } = parseTestFile(source);
+    const findings = checkLiteralRoundtrip(allTests[0]);
+    assert.equal(findings.length, 0);
+  });
+
+  // Defect: if literal_roundtrip doesn't detect the pattern through analyzeTestFile, the rule is wired wrong and never fires in practice.
+  it("fires through analyzeTestFile", () => {
+    const source = [
+      'describe("X", () => {',
+      '  it("roundtrip", () => {',
+      "    const config = {",
+      "      gameKind: 'lines98/strict',",
+      "    };",
+      "    assert.equal(config.gameKind, 'lines98/strict');",
+      "  });",
+      "});",
+    ].join("\n");
+
+    const report = analyzeTestFile(source, "test.ts");
+    assert.ok(report.findings.some((f) => f.rule === "literal_roundtrip"));
+  });
+
+  // Defect: if literal_roundtrip fires on numeric comparisons like count > 0 after construction, it false-positives on boundary checks.
+  it("fires on numeric literal roundtrip", () => {
+    const source = [
+      'describe("X", () => {',
+      '  it("numeric", () => {',
+      "    const obj = {",
+      "      count: 42,",
+      "    };",
+      "    assert.equal(obj.count, 42);",
+      "  });",
+      "});",
+    ].join("\n");
+
+    const { allTests } = parseTestFile(source);
+    const findings = checkLiteralRoundtrip(allTests[0]);
+    assert.equal(findings.length, 1);
+  });
+});
+
+describe("checkSchemaSuccessOnly", () => {
+  // slop-ignore: no_negative_test, duplicate_assertion_set, no_input_variation — rule-unit tests intentionally reuse assertion shapes.
+
+  // Defect: if schema_success_only doesn't fire when safeParse test only checks .success, schema coercion/stripping bugs go undetected — the test passes regardless of what .data contains.
+  it("fires when safeParse test only checks .success", () => {
+    const source = [
+      'describe("X", () => {',
+      '  it("accepts valid", () => {',
+      "    const result = schema.safeParse({ name: 'test' });",
+      "    assert.equal(result.success, true);",
+      "  });",
+      "});",
+    ].join("\n");
+
+    const { allTests } = parseTestFile(source);
+    const finding = checkSchemaSuccessOnly(allTests[0]);
+    assert.ok(finding);
+    assert.equal(finding.rule, "schema_success_only");
+  });
+
+  // Defect: if schema_success_only fires when .data is checked, it false-positives on thorough safeParse tests that verify the parsed output.
+  it("does not fire when .data fields are checked", () => {
+    const source = [
+      'describe("X", () => {',
+      '  it("checks data", () => {',
+      "    const result = schema.safeParse({ name: 'test' });",
+      "    assert.equal(result.success, true);",
+      "    assert.equal(result.data.name, 'test');",
+      "  });",
+      "});",
+    ].join("\n");
+
+    const { allTests } = parseTestFile(source);
+    assert.equal(checkSchemaSuccessOnly(allTests[0]), null);
+  });
+
+  // Defect: if schema_success_only fires when .error.issues is checked, it false-positives on rejection tests that verify the specific error reason.
+  it("does not fire when .error.issues is checked", () => {
+    const source = [
+      'describe("X", () => {',
+      '  it("checks error", () => {',
+      "    const result = schema.safeParse({ name: '' });",
+      "    assert.equal(result.success, false);",
+      "    assert.equal(result.error.issues[0].code, 'too_small');",
+      "  });",
+      "});",
+    ].join("\n");
+
+    const { allTests } = parseTestFile(source);
+    assert.equal(checkSchemaSuccessOnly(allTests[0]), null);
+  });
+
+  // Defect: if schema_success_only fires on non-safeParse tests, it false-positives on tests that happen to check a .success property unrelated to Zod.
+  it("does not fire on tests without safeParse", () => {
+    const source = [
+      'describe("X", () => {',
+      '  it("unrelated", () => {',
+      "    const result = { success: true };",
+      "    assert.equal(result.success, true);",
+      "  });",
+      "});",
+    ].join("\n");
+
+    const { allTests } = parseTestFile(source);
+    assert.equal(checkSchemaSuccessOnly(allTests[0]), null);
+  });
+
+  // Defect: if schema_success_only doesn't fire through analyzeTestFile, the rule is wired wrong and never appears in reports.
+  it("fires through analyzeTestFile", () => {
+    const source = [
+      'describe("X", () => {',
+      '  it("parse only", () => {',
+      "    const result = MoveSchema.safeParse({ index: 4 });",
+      "    assert.equal(result.success, true);",
+      "  });",
+      "});",
+    ].join("\n");
+
+    const report = analyzeTestFile(source, "test.ts");
+    assert.ok(report.findings.some((f) => f.rule === "schema_success_only"));
+  });
+
+  // Defect: if schema_success_only works with vitest expect() patterns, the rule catches the most common safeParse slop in vitest codebases.
+  it("fires with expect() syntax", () => {
+    const source = [
+      'describe("X", () => {',
+      '  it("parse only", () => {',
+      "    const result = schema.safeParse(data);",
+      "    expect(result.success).toBe(true);",
+      "  });",
+      "});",
+    ].join("\n");
+
+    const { allTests } = parseTestFile(source);
+    const finding = checkSchemaSuccessOnly(allTests[0]);
+    assert.ok(finding);
+  });
+});
+
+describe("checkConditionalAssertion", () => {
+  // slop-ignore: no_negative_test, duplicate_assertion_set, no_input_variation — rule-unit tests intentionally reuse assertion shapes.
+
+  // Defect: if conditional_assertion doesn't fire when all assertions are inside if blocks, tests with false conditions execute zero assertions and pass vacuously — a must-fail scenario.
+  it("fires when all assertions are inside if block", () => {
+    const source = [
+      'describe("X", () => {',
+      '  it("conditional", () => {',
+      "    const result = analyze(config);",
+      "    if (result.score < 0.3) {",
+      '      assert.ok(result.recommendations.some((r) => r.includes("low")));',
+      "    }",
+      "  });",
+      "});",
+    ].join("\n");
+
+    const { allTests } = parseTestFile(source);
+    const finding = checkConditionalAssertion(allTests[0]);
+    assert.ok(finding);
+    assert.equal(finding.rule, "conditional_assertion");
+    assert.equal(finding.severity, "must-fail");
+  });
+
+  // Defect: if conditional_assertion fires when assertions exist outside if blocks, it false-positives on tests that have both conditional and unconditional assertions.
+  it("does not fire when assertions exist outside conditionals", () => {
+    const source = [
+      'describe("X", () => {',
+      '  it("mixed", () => {',
+      "    const result = analyze(config);",
+      "    assert.ok(result);",
+      "    if (result.score < 0.3) {",
+      '      assert.ok(result.recommendations.some((r) => r.includes("low")));',
+      "    }",
+      "  });",
+      "});",
+    ].join("\n");
+
+    const { allTests } = parseTestFile(source);
+    assert.equal(checkConditionalAssertion(allTests[0]), null);
+  });
+
+  // Defect: if conditional_assertion fires on tests with no conditionals at all, every normal test gets flagged — complete false positive.
+  it("does not fire when no conditional blocks exist", () => {
+    const source = [
+      'describe("X", () => {',
+      '  it("normal", () => {',
+      "    const result = compute();",
+      "    assert.equal(result, 42);",
+      "  });",
+      "});",
+    ].join("\n");
+
+    const { allTests } = parseTestFile(source);
+    assert.equal(checkConditionalAssertion(allTests[0]), null);
+  });
+
+  // Defect: if conditional_assertion doesn't fire through analyzeTestFile, the rule is wired wrong and invisible in reports.
+  it("fires through analyzeTestFile", () => {
+    const source = [
+      'describe("X", () => {',
+      '  it("vacuous", () => {',
+      "    const x = getValue();",
+      "    if (x > 10) {",
+      "      assert.equal(x, 11);",
+      "    }",
+      "  });",
+      "});",
+    ].join("\n");
+
+    const report = analyzeTestFile(source, "test.ts");
+    assert.ok(report.findings.some((f) => f.rule === "conditional_assertion"));
+    assert.ok(report.findings.some((f) => f.rule === "conditional_assertion" && f.severity === "must-fail"));
   });
 });
 

@@ -1,7 +1,7 @@
 /**
  * Slop Test Detector
  *
- * Static analyzer for test quality. Detects 12 slop patterns in test code
+ * Static analyzer for test quality. Detects 15 slop patterns in test code
  * that compile and pass but catch zero bugs.
  *
  * Zero dependencies — uses only Node.js built-ins.
@@ -29,7 +29,10 @@ export type SlopRule =
   | "no_negative_test"
   | "duplicate_assertion_set"
   | "assert_return_type_only"
-  | "no_input_variation";
+  | "no_input_variation"
+  | "literal_roundtrip"
+  | "schema_success_only"
+  | "conditional_assertion";
 
 export interface ParsedAssertion {
   lineNumber: number;
@@ -104,6 +107,9 @@ const ALL_RULES: SlopRule[] = [
   "duplicate_assertion_set",
   "assert_return_type_only",
   "no_input_variation",
+  "literal_roundtrip",
+  "schema_success_only",
+  "conditional_assertion",
 ];
 
 const OPINIONATED_RULES: SlopRule[] = ["missing_defect_comment", "trivial_defect_comment"];
@@ -121,9 +127,12 @@ const RULE_SEVERITY: Record<SlopRule, Severity> = {
   duplicate_assertion_set: "should-fail",
   assert_return_type_only: "should-fail",
   no_input_variation: "should-fail",
+  literal_roundtrip: "should-fail",
+  schema_success_only: "should-fail",
+  conditional_assertion: "must-fail",
 };
 
-// Presets: strict = all 12, balanced = no defect-comment rules, advisory = all as should-fail
+// Presets: strict = all 15, balanced = no defect-comment rules, advisory = all rules with threshold 0
 export function getPreset(name: "strict" | "balanced" | "advisory"): SlopConfig {
   switch (name) {
     case "strict":
@@ -1110,6 +1119,173 @@ export function checkAssertReturnTypeOnly(block: ParsedTestBlock): SlopFinding |
 }
 
 // ============================================================================
+// RULE CHECKERS: NEW BLOCK-LEVEL RULES
+// ============================================================================
+
+export function checkLiteralRoundtrip(block: ParsedTestBlock): SlopFinding[] {
+  const findings: SlopFinding[] = [];
+  const active = activeAssertions(block);
+  if (active.length === 0) return findings;
+
+  // Collect object literal assignments: const x = { key: "literal", ... };
+  // Map from variable name → Map<field, literal value>
+  const objLiterals = new Map<string, Map<string, string>>();
+  const assignRe = /(?:const|let|var)\s+([a-zA-Z_$][\w$]*)\s*(?::[^=]+=|=)\s*\{/;
+
+  for (const line of block.bodyLines) {
+    const trimmed = line.trimStart();
+    const match = assignRe.exec(trimmed);
+    if (!match) continue;
+
+    const varName = match[1];
+    const fields = new Map<string, string>();
+
+    // Simple field extraction: find `key: literal,` patterns in subsequent lines
+    const startIdx = block.bodyLines.indexOf(line);
+    for (let j = startIdx; j < block.bodyLines.length; j++) {
+      const fLine = block.bodyLines[j].trimStart();
+      // Match: fieldName: 'literal' or fieldName: "literal" or fieldName: number or fieldName: true/false
+      const fieldMatch = fLine.match(/^(\w+)\s*:\s*('([^']*)'|"([^"]*)"|(-?\d+(?:\.\d+)?)|true|false)\s*[,}]/);
+      if (fieldMatch) {
+        const fieldName = fieldMatch[1];
+        const literalValue = fieldMatch[2];
+        fields.set(fieldName, literalValue);
+      }
+      // Stop at closing brace of the object
+      if (fLine.includes("};")) break;
+    }
+
+    if (fields.size > 0) objLiterals.set(varName, fields);
+  }
+
+  if (objLiterals.size === 0) return findings;
+
+  // Check if assertions compare obj.field to the same literal from construction
+  for (const a of active) {
+    if (a.method !== "equal" && a.method !== "deepStrictEqual" && a.method !== "strictEqual") continue;
+    const parts = splitAssertArgs(a.args);
+    if (parts.length < 2) continue;
+
+    // Check both arg positions: assert.equal(obj.field, literal) or expect(obj.field).toBe(literal)
+    for (let argIdx = 0; argIdx < 2; argIdx++) {
+      const accessPart = parts[argIdx].trim();
+      const literalPart = parts[1 - argIdx].trim();
+
+      // Match obj.field or obj.field.subfield
+      const accessMatch = accessPart.match(/^([a-zA-Z_$][\w$]*)\.(\w+)$/);
+      if (!accessMatch) continue;
+
+      const [, varName, fieldName] = accessMatch;
+      const fields = objLiterals.get(varName);
+      if (!fields) continue;
+
+      const constructedLiteral = fields.get(fieldName);
+      if (constructedLiteral !== undefined && constructedLiteral === literalPart) {
+        findings.push(
+          makeFinding(
+            "literal_roundtrip",
+            block,
+            a.lineNumber,
+            `Asserts ${accessPart} === ${literalPart} — same literal used to construct ${varName}.${fieldName}`,
+            "Call a production function between construction and assertion, or assert on computed properties",
+          ),
+        );
+        break; // one finding per assertion
+      }
+    }
+  }
+
+  return findings;
+}
+
+export function checkSchemaSuccessOnly(block: ParsedTestBlock): SlopFinding | null {
+  const active = activeAssertions(block);
+  if (active.length === 0) return null;
+
+  // Check if test body contains .safeParse( or .safeParseAsync(
+  const hasSafeParse = block.bodyLines.some((line) => /\.safeParse(?:Async)?\s*\(/.test(line));
+  if (!hasSafeParse) return null;
+
+  // Check if any assertion verifies .data or .error.issues content
+  const hasDataOrErrorCheck = active.some((a) => {
+    const args = a.args;
+    return (
+      /\.data[.\[]/.test(args) ||
+      /\.data\s*[,)]/.test(args) ||
+      /\.error\.issues/.test(args) ||
+      /\.error\.message/.test(args)
+    );
+  });
+  if (hasDataOrErrorCheck) return null;
+
+  // Check that there IS a .success assertion (to confirm this is a safeParse test pattern)
+  const hasSuccessCheck = active.some((a) => /\.success/.test(a.args));
+  if (!hasSuccessCheck) return null;
+
+  return makeFinding(
+    "schema_success_only",
+    block,
+    block.startLine,
+    "safeParse test only checks .success — does not verify .data fields or .error.issues content",
+    "Add assertions on result.data properties (acceptance) or result.error.issues (rejection)",
+  );
+}
+
+export function checkConditionalAssertion(block: ParsedTestBlock): SlopFinding | null {
+  const active = activeAssertions(block);
+  if (active.length === 0) return null;
+
+  // Check if ALL assertions are inside if/switch blocks by examining brace depth.
+  // If the line containing the assertion has higher brace depth than the test's opening line,
+  // AND the test body contains an if/switch statement that increases depth, flag it.
+
+  // Find lines with if/switch (not inside strings/comments)
+  const conditionalLines = new Set<number>();
+  for (let i = 0; i < block.bodyLines.length; i++) {
+    const trimmed = block.bodyLines[i].trimStart();
+    if (/^(?:if|switch)\s*\(/.test(trimmed) || /}\s*else\s*\{/.test(trimmed) || /}\s*else\s+if\s*\(/.test(trimmed)) {
+      conditionalLines.add(i);
+    }
+  }
+
+  if (conditionalLines.size === 0) return null;
+
+  // Track brace depth relative to test body opening
+  let inBlockComment = false;
+  const lineDepths: number[] = [];
+  let depth = 0;
+  for (let i = 0; i < block.bodyLines.length; i++) {
+    const { delta, endsInBlockComment } = computeBraceDelta(block.bodyLines[i], inBlockComment);
+    lineDepths.push(depth);
+    depth += delta;
+    inBlockComment = endsInBlockComment;
+  }
+
+  // The test body's base depth is at the opening line (first line, typically `it("...", () => {`)
+  // Assertions at depth > baseDepth+1 are inside nested blocks
+  const baseDepth = lineDepths[0] ?? 0;
+
+  // Check each assertion's line depth
+  const allConditional = active.every((a) => {
+    const relLine = a.lineNumber - block.startLine;
+    if (relLine < 0 || relLine >= lineDepths.length) return false;
+    return lineDepths[relLine] > baseDepth + 1;
+  });
+
+  if (allConditional) {
+    return makeFinding(
+      "conditional_assertion",
+      block,
+      block.startLine,
+      "All assertions are inside conditional blocks — test may execute zero assertions and pass vacuously",
+      "Move at least one assertion outside the if/switch, or assert on the condition itself",
+    );
+  }
+
+  return null;
+}
+
+// ============================================================================
 // RULE CHECKERS: SHOULD-FAIL (DESCRIBE-LEVEL)
 // ============================================================================
 
@@ -1266,6 +1442,9 @@ function runBlockRules(block: ParsedTestBlock, enabled: Set<SlopRule>): SlopFind
     ["assert_on_type_not_value", () => checkAssertOnTypeNotValue(block)],
     ["truthiness_only", () => checkTruthinessOnly(block)],
     ["assert_return_type_only", () => checkAssertReturnTypeOnly(block)],
+    ["literal_roundtrip", () => checkLiteralRoundtrip(block)],
+    ["schema_success_only", () => checkSchemaSuccessOnly(block)],
+    ["conditional_assertion", () => checkConditionalAssertion(block)],
   ];
   for (const [rule, check] of blockRules) {
     if (!enabled.has(rule)) continue;

@@ -1,6 +1,6 @@
 # Slop Patterns Reference
 
-All 12 slop patterns with before (slop) and after (fixed) examples.
+All 15 slop patterns with before (slop) and after (fixed) examples.
 
 ---
 
@@ -276,5 +276,79 @@ it("classifies error keywords as high", () => {
 
 it("classifies info keywords as low", () => {
   assert.equal(classify("info"), "low");
+});
+```
+
+---
+
+### 13. literal_roundtrip
+
+**Before (slop)** — assertion echoes the literal used during construction:
+```typescript
+it("creates a user", () => {
+  const user = { name: "Alice", age: 30 };
+  assert.equal(user.name, "Alice");  // just reading back the literal
+  assert.equal(user.age, 30);        // same — no computation tested
+});
+```
+
+**After (fixed)** — pass the object through a function and assert on computed output:
+```typescript
+it("serializes user correctly", () => {
+  const user = { name: "Alice", age: 30 };
+  const result = serializeUser(user);
+  assert.equal(result.displayName, "Alice");
+  assert.equal(result.isAdult, true);
+});
+```
+
+---
+
+### 14. schema_success_only
+
+**Before (slop)** — only checks `.success`, never inspects `.data` or `.error`:
+```typescript
+it("validates email", () => {
+  const result = emailSchema.safeParse("user@example.com");
+  assert.equal(result.success, true);  // schema could accept anything
+});
+```
+
+**After (fixed)** — also checks parsed data or error details:
+```typescript
+it("validates email", () => {
+  const result = emailSchema.safeParse("user@example.com");
+  assert.equal(result.success, true);
+  assert.equal(result.data, "user@example.com");
+});
+
+it("rejects invalid email", () => {
+  const result = emailSchema.safeParse("not-an-email");
+  assert.equal(result.success, false);
+  assert.ok(result.error.issues.length > 0);
+});
+```
+
+---
+
+### 15. conditional_assertion (must-fail)
+
+**Before (slop)** — all assertions inside a conditional, so the test passes silently if the condition is false:
+```typescript
+it("handles results", () => {
+  const results = fetchResults();
+  if (results.length > 0) {
+    assert.equal(results[0].status, "ok");
+  }
+  // If results is empty, test passes with ZERO assertions
+});
+```
+
+**After (fixed)** — assert unconditionally:
+```typescript
+it("handles results", () => {
+  const results = fetchResults();
+  assert.ok(results.length > 0, "expected at least one result");
+  assert.equal(results[0].status, "ok");
 });
 ```

@@ -1,6 +1,6 @@
 ---
 name: slop-test-detector
-description: "Static analyzer that detects 12 slop patterns in test code — tests that compile and pass but catch zero bugs."
+description: "Static analyzer that detects 15 slop patterns in test code — tests that compile and pass but catch zero bugs."
 ---
 
 # Slop Test Detector
@@ -34,6 +34,8 @@ Before auditing or generating tests, identify which slop patterns apply:
 | Assertions check values, not types | Is the test checking actual output, not just typeof? | `assert_on_type_not_value`, `truthiness_only` |
 | Error paths are tested | Does the describe block include negative test cases? | `no_negative_test` |
 | Tests vary their inputs | Do sibling tests exercise different code paths? | `no_input_variation`, `duplicate_assertion_set` |
+| Assertions test computed values | Are assertions checking results, not echoing construction literals? | `literal_roundtrip`, `schema_success_only` |
+| Assertions always execute | Can the test pass without any assertion running? | `conditional_assertion` |
 
 ---
 
@@ -183,6 +185,9 @@ score = max(0, round(100 × (1 - weightedFindings / testCount)))
 | `duplicate_assertion_set` | Two `it()` blocks with identical normalized assertion sequences | should-fail | on |
 | `assert_return_type_only` | Sole assertion is `assert.ok(r)` on a return value | should-fail | on |
 | `no_input_variation` | Sibling `it()` blocks pass identical args to same function | should-fail | on |
+| `literal_roundtrip` | Assertion compares `obj.field` to the same literal used to construct `obj` | should-fail | on |
+| `schema_success_only` | `safeParse()` result checked for `.success` but never `.data` or `.error.issues` | should-fail | on |
+| `conditional_assertion` | All assertions are inside `if`/`switch` blocks — test may silently pass | must-fail | on |
 
 **opt-in** rules are only active in the `strict` preset. Use `getPreset('strict')` or add them to a custom `enabledRules` set.
 
