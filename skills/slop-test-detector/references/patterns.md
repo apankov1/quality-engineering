@@ -1,6 +1,6 @@
 # Slop Patterns Reference
 
-All 15 slop patterns with before (slop) and after (fixed) examples.
+All 18 slop patterns with before (slop) and after (fixed) examples.
 
 ---
 
@@ -351,4 +351,102 @@ it("handles results", () => {
   assert.ok(results.length > 0, "expected at least one result");
   assert.equal(results[0].status, "ok");
 });
+```
+
+---
+
+### 16. vacuous_property
+
+**Before (slop)** — `return true` path with zero assertions (2a):
+```typescript
+it('priority correctness', () => {
+  fc.assert(
+    fc.property(gameKindGen, eventTypeGen, (gameKind, eventType) => {
+      if (hasGameSpecific && isPlatformEvent) {
+        expect(result).toEqual(gameSpecificMeta);
+        return true;
+      }
+      return true;  // most inputs hit this path — 0 assertions
+    }),
+  );
+});
+```
+
+**Before (slop)** — zero-variation generators (2b):
+```typescript
+it('default constructor', () => {
+  fc.assert(
+    fc.property(fc.constant(undefined), (_ignored) => {
+      const chain = new EventHashChain();
+      expect(chain.getSemanticHash()).toBeUndefined();
+      // fc.constant = same test every run
+    }),
+  );
+});
+```
+
+**After (fixed)** — assert on all paths with real generators:
+```typescript
+it('priority correctness', () => {
+  fc.assert(
+    fc.property(gameKindGen, eventTypeGen, (gameKind, eventType) => {
+      const result = resolvePriority(gameKind, eventType);
+      expect(result).toBeDefined();
+      expect(typeof result.priority).toBe('number');
+    }),
+  );
+});
+```
+
+---
+
+### 17. no_production_call
+
+**Before (slop)** — test only exercises builtins, no production function called:
+```typescript
+it('expert-level weights must always yield negative net score', () => {
+  fc.assert(
+    fc.property(
+      fc.integer({ min: -100, max: -50 }),
+      fc.integer({ min: 20, max: 49 }),
+      (breakingPenalty, creationBonus) => {
+        const netScore = breakingPenalty + creationBonus;
+        return netScore < 0;  // pure arithmetic — no production function
+      },
+    ),
+  );
+});
+```
+
+**After (fixed)** — call the actual scoring function:
+```typescript
+it('expert-level weights must always yield negative net score', () => {
+  fc.assert(
+    fc.property(
+      fc.integer({ min: -100, max: -50 }),
+      fc.integer({ min: 20, max: 49 }),
+      (breakingPenalty, creationBonus) => {
+        const score = computeNetScore(breakingPenalty, creationBonus);
+        return score < 0;
+      },
+    ),
+  );
+});
+```
+
+---
+
+### 18. impossible_assertion
+
+**Before (slop)** — assertion that is mathematically impossible to fail:
+```typescript
+expect(Object.keys(aliasToCanonical).length).toBeGreaterThanOrEqual(0);
+// .length is always >= 0 — this CANNOT fail
+```
+
+**After (fixed)** — assert on a specific expected length:
+```typescript
+expect(Object.keys(aliasToCanonical).length).toBeGreaterThanOrEqual(1);
+// or assert the exact count:
+expect(Object.keys(aliasToCanonical)).toHaveLength(5);
 ```

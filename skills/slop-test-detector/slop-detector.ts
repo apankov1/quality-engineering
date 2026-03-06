@@ -32,7 +32,10 @@ export type SlopRule =
   | "no_input_variation"
   | "literal_roundtrip"
   | "schema_success_only"
-  | "conditional_assertion";
+  | "conditional_assertion"
+  | "vacuous_property"
+  | "no_production_call"
+  | "impossible_assertion";
 
 export interface ParsedAssertion {
   lineNumber: number;
@@ -110,6 +113,9 @@ const ALL_RULES: SlopRule[] = [
   "literal_roundtrip",
   "schema_success_only",
   "conditional_assertion",
+  "vacuous_property",
+  "no_production_call",
+  "impossible_assertion",
 ];
 
 const OPINIONATED_RULES: SlopRule[] = ["missing_defect_comment", "trivial_defect_comment"];
@@ -130,9 +136,12 @@ const RULE_SEVERITY: Record<SlopRule, Severity> = {
   literal_roundtrip: "should-fail",
   schema_success_only: "should-fail",
   conditional_assertion: "must-fail",
+  vacuous_property: "should-fail",
+  no_production_call: "should-fail",
+  impossible_assertion: "should-fail",
 };
 
-// Presets: strict = all 15, balanced = no defect-comment rules, advisory = all rules with threshold 0
+// Presets: strict = all 18, balanced = no defect-comment rules, advisory = all rules with threshold 0
 export function getPreset(name: "strict" | "balanced" | "advisory"): SlopConfig {
   switch (name) {
     case "strict":
@@ -1286,6 +1295,241 @@ export function checkConditionalAssertion(block: ParsedTestBlock): SlopFinding |
 }
 
 // ============================================================================
+// RULE CHECKERS: ISSUE #17 RULES
+// ============================================================================
+
+export function checkVacuousProperty(block: ParsedTestBlock): SlopFinding | null {
+  // Only applies to tests using fast-check's fc.property
+  const hasFcProperty = block.bodyLines.some((line) => /\bfc\.property\s*\(/.test(line));
+  if (!hasFcProperty) return null;
+
+  // Sub-pattern 2b: all generators are fc.constant(...) → zero variation
+  // Find the fc.property( call and check if all generator args before the callback are fc.constant
+  for (const line of block.bodyLines) {
+    const trimmed = line.trimStart();
+    const propMatch = trimmed.match(/\bfc\.property\s*\(\s*fc\.constant\s*\(/);
+    if (propMatch) {
+      // Check if ALL generators in this property call are fc.constant
+      // Scan the bodyLines for the fc.property call and its arguments
+      const allFcConstant = block.bodyLines.every((l) => {
+        const t = l.trimStart();
+        // Lines with generator args (before the callback) should all be fc.constant
+        if (/^\s*fc\.\w+\s*\(/.test(l) && !/\bfc\.property\s*\(/.test(l) && !/\bfc\.assert\s*\(/.test(l)) {
+          return /\bfc\.constant\s*\(/.test(t);
+        }
+        return true;
+      });
+      if (allFcConstant) {
+        return makeFinding(
+          "vacuous_property",
+          block,
+          block.startLine,
+          "All fc.property generators are fc.constant — zero input variation, same test every run",
+          "Use a plain unit test instead, or add generators that produce varying inputs",
+        );
+      }
+    }
+  }
+
+  // Sub-pattern 2a: return true that bypasses assertions
+  // Track brace depth to find return true statements at various depths
+  let inBlockComment = false;
+  const lineDepths: number[] = [];
+  let depth = 0;
+  for (let i = 0; i < block.bodyLines.length; i++) {
+    const { delta, endsInBlockComment } = computeBraceDelta(block.bodyLines[i], inBlockComment);
+    lineDepths.push(depth);
+    depth += delta;
+    inBlockComment = endsInBlockComment;
+  }
+
+  // Find return true statements and check if any are at a depth where no assertion exists at the same depth
+  const returnTrueLines: number[] = [];
+  for (let i = 0; i < block.bodyLines.length; i++) {
+    const trimmed = block.bodyLines[i].trimStart();
+    if (/^return\s+true\s*;?\s*$/.test(trimmed)) {
+      returnTrueLines.push(i);
+    }
+  }
+
+  if (returnTrueLines.length === 0) return null;
+
+  // Get active assertion line indices
+  const active = activeAssertions(block);
+  const assertionLineIndices = new Set(active.map((a) => a.lineNumber - block.startLine));
+
+  // Check if any return true is at a depth where no assertion exists at the same or deeper level
+  // in the same brace scope. Simplified: if there's a return true at a depth that has no assertion
+  // at the same depth in the lines leading up to it within its scope → vacuous path.
+  for (const rtLine of returnTrueLines) {
+    const rtDepth = lineDepths[rtLine];
+    // Check if there's an assertion on this path — must be at same or shallower depth
+    // (assertions inside deeper conditional blocks don't necessarily execute on this path)
+    let hasAssertionInScope = false;
+    for (const aIdx of assertionLineIndices) {
+      if (aIdx < rtLine && lineDepths[aIdx] <= rtDepth) {
+        hasAssertionInScope = true;
+        break;
+      }
+    }
+    if (!hasAssertionInScope) {
+      return makeFinding(
+        "vacuous_property",
+        block,
+        block.startLine + rtLine,
+        "fc.property callback has a `return true` path with zero assertions — test passes vacuously for most inputs",
+        "Remove the early return and assert unconditionally, or add assertions before the return",
+      );
+    }
+  }
+
+  return null;
+}
+
+const TEST_FRAMEWORK_IDENTS = new Set([
+  "assert",
+  "expect",
+  "describe",
+  "it",
+  "test",
+  "beforeEach",
+  "afterEach",
+  "beforeAll",
+  "afterAll",
+  "vi",
+  "jest",
+  "fc",
+  "mock",
+  "spy",
+  "suite",
+  "bench",
+]);
+
+export function parseImports(source: string): string[] {
+  const identifiers: string[] = [];
+  for (const line of source.split("\n")) {
+    const trimmed = line.trimStart();
+    // import { a, b as c } from '...'
+    const namedMatch = trimmed.match(/^import\s*(?:type\s+)?\{([^}]+)\}\s*from\s/);
+    if (namedMatch) {
+      // Skip type-only imports
+      if (/^import\s+type\s/.test(trimmed)) continue;
+      const names = namedMatch[1]
+        .split(",")
+        .map((s) => {
+          const parts = s.trim().split(/\s+as\s+/);
+          return (parts[1] || parts[0]).trim();
+        })
+        .filter((s) => s.length > 0);
+      identifiers.push(...names);
+      continue;
+    }
+    // import X from '...'
+    const defaultMatch = trimmed.match(/^import\s+([a-zA-Z_$][\w$]*)\s+from\s/);
+    if (defaultMatch) {
+      identifiers.push(defaultMatch[1]);
+      continue;
+    }
+    // import * as X from '...'
+    const starMatch = trimmed.match(/^import\s*\*\s*as\s+([a-zA-Z_$][\w$]*)\s+from\s/);
+    if (starMatch) {
+      identifiers.push(starMatch[1]);
+    }
+  }
+  return identifiers;
+}
+
+export function checkNoProductionCall(block: ParsedTestBlock, productionImports: string[]): SlopFinding | null {
+  if (productionImports.length === 0) return null;
+
+  const bodyText = block.bodyLines.join("\n");
+  const identChar = /[A-Za-z0-9_$]/;
+
+  for (const ident of productionImports) {
+    // Check if the identifier appears as a function call or constructor (new Ident) or property access (ident.method)
+    const re = new RegExp(`\\b${ident.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\b`);
+    if (!re.test(bodyText)) continue;
+
+    // Verify it's actually used in code (not just in a string or comment)
+    for (const line of block.bodyLines) {
+      const trimmed = line.trimStart();
+      if (trimmed.startsWith("//")) continue;
+
+      let found = false;
+      scanCode({
+        text: trimmed,
+        onCode(_ch, i) {
+          if (!trimmed.startsWith(ident, i)) return;
+          const prev = i > 0 ? trimmed[i - 1] : "";
+          if (prev && identChar.test(prev)) return;
+          const next = trimmed[i + ident.length] ?? "";
+          if (next && identChar.test(next)) return;
+          found = true;
+          return "stop";
+        },
+        onLineComment() {
+          return "stop";
+        },
+      });
+
+      if (found) return null; // Production import IS used — no finding
+    }
+  }
+
+  return makeFinding(
+    "no_production_call",
+    block,
+    block.startLine,
+    "Test body calls no imported production function — tests only builtins or language guarantees",
+    "Call a function from the module under test and assert on its result",
+  );
+}
+
+const IMPOSSIBLE_PATTERNS: Array<{ re: RegExp; message: string }> = [
+  {
+    re: /\.toBeGreaterThanOrEqual\s*\(\s*0\s*\)/,
+    message: ".length is always >= 0 — assertion cannot fail",
+  },
+  {
+    re: /\.not\s*\.\s*toBeLessThan\s*\(\s*0\s*\)/,
+    message: ".length is always >= 0 — negated assertion cannot fail",
+  },
+  {
+    re: /assert\.ok\s*\(\s*[\w$.]+\.length\s*>=\s*0\s*\)/,
+    message: ".length >= 0 is always true — assertion cannot fail",
+  },
+];
+
+export function checkImpossibleAssertion(block: ParsedTestBlock): SlopFinding[] {
+  const findings: SlopFinding[] = [];
+
+  for (let i = 0; i < block.bodyLines.length; i++) {
+    const trimmed = block.bodyLines[i].trimStart();
+    if (trimmed.startsWith("//")) continue;
+
+    // Check for .length combined with impossible comparison
+    if (!/\.length\b/.test(trimmed)) continue;
+
+    for (const pattern of IMPOSSIBLE_PATTERNS) {
+      if (pattern.re.test(trimmed)) {
+        findings.push(
+          makeFinding(
+            "impossible_assertion",
+            block,
+            block.startLine + i,
+            pattern.message,
+            "Assert on a specific expected length, or remove the tautological check",
+          ),
+        );
+        break;
+      }
+    }
+  }
+
+  return findings;
+}
+
+// ============================================================================
 // RULE CHECKERS: SHOULD-FAIL (DESCRIBE-LEVEL)
 // ============================================================================
 
@@ -1445,6 +1689,8 @@ function runBlockRules(block: ParsedTestBlock, enabled: Set<SlopRule>): SlopFind
     ["literal_roundtrip", () => checkLiteralRoundtrip(block)],
     ["schema_success_only", () => checkSchemaSuccessOnly(block)],
     ["conditional_assertion", () => checkConditionalAssertion(block)],
+    ["vacuous_property", () => checkVacuousProperty(block)],
+    ["impossible_assertion", () => checkImpossibleAssertion(block)],
   ];
   for (const [rule, check] of blockRules) {
     if (!enabled.has(rule)) continue;
@@ -1494,10 +1740,21 @@ export function analyzeTestFile(
   const { describes, allTests } = parseTestFile(source, config.assertionEquivalents);
   const findings: SlopFinding[] = [];
 
+  // Parse imports once for no_production_call rule
+  const productionImports = config.enabledRules.has("no_production_call")
+    ? parseImports(source).filter((id) => !TEST_FRAMEWORK_IDENTS.has(id))
+    : [];
+
   for (const test of allTests) {
     const suppressed = parseSuppressedRules([...test.precedingLines, ...test.bodyLines]);
     const blockFindings = runBlockRules(test, config.enabledRules);
     findings.push(...blockFindings.filter((f) => !suppressed.has(f.rule)));
+
+    // no_production_call runs separately (needs file-level imports)
+    if (config.enabledRules.has("no_production_call") && !suppressed.has("no_production_call")) {
+      const npc = checkNoProductionCall(test, productionImports);
+      if (npc) findings.push(npc);
+    }
   }
 
   for (const desc of describes) {

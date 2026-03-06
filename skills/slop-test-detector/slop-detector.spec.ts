@@ -12,19 +12,23 @@ import {
   checkConditionalAssertion,
   checkDuplicateAssertionSet,
   checkEmptyTestBody,
+  checkImpossibleAssertion,
   checkLiteralRoundtrip,
   checkMissingDefectComment,
   checkNoInputVariation,
   checkNoNegativeTest,
+  checkNoProductionCall,
   checkSchemaSuccessOnly,
   checkSelfReferentialAssertion,
   checkTautologicalAssertion,
   checkTrivialDefectComment,
   checkTruthinessOnly,
+  checkVacuousProperty,
   formatReport,
   formatReportJSON,
   getPreset,
   isLiteral,
+  parseImports,
   parseTestFile,
   splitAssertArgs,
   validateTestBlock,
@@ -1071,15 +1075,15 @@ describe("getPreset", () => {
   });
 
   // Defect: if strict preset misses any rule, teams opting in to full enforcement still have blind spots.
-  it("strict preset includes all 15 rules", () => {
+  it("strict preset includes all 18 rules", () => {
     const config = getPreset("strict");
-    assert.equal(config.enabledRules.size, 15);
+    assert.equal(config.enabledRules.size, 18);
   });
 
   // Defect: if advisory preset doesn't include all rules, teams lose visibility into patterns they haven't opted into enforcing.
   it("advisory preset includes all rules with zero threshold", () => {
     const config = getPreset("advisory");
-    assert.equal(config.enabledRules.size, 15);
+    assert.equal(config.enabledRules.size, 18);
     assert.equal(config.scoreThreshold, 0);
   });
 });
@@ -1527,6 +1531,279 @@ describe("checkConditionalAssertion", () => {
     const report = analyzeTestFile(source, "test.ts");
     assert.ok(report.findings.some((f) => f.rule === "conditional_assertion"));
     assert.ok(report.findings.some((f) => f.rule === "conditional_assertion" && f.severity === "must-fail"));
+  });
+});
+
+// ============================================================================
+// ISSUE #17 RULES: vacuous_property, no_production_call, impossible_assertion
+// ============================================================================
+
+describe("checkVacuousProperty", () => {
+  // slop-ignore: no_negative_test, duplicate_assertion_set, no_input_variation — rule-unit tests for vacuous_property intentionally reuse assertion shapes.
+
+  // Defect: if vacuous_property doesn't fire on return true paths, property tests silently pass with zero assertions for most inputs.
+  it("fires on return true outside assertion scope in fc.property", () => {
+    const source = [
+      'describe("X", () => {',
+      '  it("priority correctness", () => {',
+      "    fc.assert(",
+      "      fc.property(gameKindGen, eventTypeGen, (gameKind, eventType) => {",
+      "        if (hasGameSpecific && isPlatformEvent) {",
+      "          expect(result).toEqual(gameSpecificMeta);",
+      "          return true;",
+      "        }",
+      "        return true;",
+      "      }),",
+      "    );",
+      "  });",
+      "});",
+    ].join("\n");
+
+    const { allTests } = parseTestFile(source);
+    const finding = checkVacuousProperty(allTests[0]);
+    assert.notEqual(finding, null);
+    assert.equal(finding?.rule, "vacuous_property");
+    assert.equal(finding?.severity, "should-fail");
+  });
+
+  // Defect: if vacuous_property fires on fc.constant but the test has real generators, legitimate use of fc.constant is incorrectly flagged.
+  it("fires on fc.constant-only generators", () => {
+    const source = [
+      'describe("X", () => {',
+      '  it("default constructor", () => {',
+      "    fc.assert(",
+      "      fc.property(fc.constant(undefined), (_ignored) => {",
+      "        const chain = new EventHashChain();",
+      "        expect(chain.getSemanticHash()).toBeUndefined();",
+      "      }),",
+      "    );",
+      "  });",
+      "});",
+    ].join("\n");
+
+    const { allTests } = parseTestFile(source);
+    const finding = checkVacuousProperty(allTests[0]);
+    assert.notEqual(finding, null);
+    assert.equal(finding?.rule, "vacuous_property");
+    assert.ok(finding?.message.includes("fc.constant"));
+  });
+
+  // Defect: if vacuous_property fires on tests without fc.property, non-property tests get false positives.
+  it("does not fire on non-fc.property tests", () => {
+    const source = [
+      'describe("X", () => {',
+      '  it("plain test", () => {',
+      "    const result = compute();",
+      "    assert.equal(result, 42);",
+      "  });",
+      "});",
+    ].join("\n");
+
+    const { allTests } = parseTestFile(source);
+    assert.equal(checkVacuousProperty(allTests[0]), null);
+  });
+
+  // Defect: if vacuous_property fires when all return true paths have assertions, legitimate property tests are falsely flagged.
+  it("does not fire when return true is inside assertion scope", () => {
+    const source = [
+      'describe("X", () => {',
+      '  it("all paths assert", () => {',
+      "    fc.assert(",
+      "      fc.property(fc.integer(), (n) => {",
+      "        expect(n).toBeGreaterThan(-1000);",
+      "        return true;",
+      "      }),",
+      "    );",
+      "  });",
+      "});",
+    ].join("\n");
+
+    const { allTests } = parseTestFile(source);
+    assert.equal(checkVacuousProperty(allTests[0]), null);
+  });
+});
+
+describe("checkNoProductionCall", () => {
+  // slop-ignore: no_negative_test, duplicate_assertion_set, no_input_variation — rule-unit tests for no_production_call intentionally reuse assertion shapes.
+
+  // Defect: if no_production_call doesn't fire when test only does arithmetic, tests that validate language semantics instead of production code go undetected.
+  it("fires when test body calls no imported function", () => {
+    const source = [
+      'import { computeScore } from "./scoring.ts";',
+      'describe("X", () => {',
+      '  it("arithmetic only", () => {',
+      "    const net = -100 + 49;",
+      "    assert.ok(net < 0);",
+      "  });",
+      "});",
+    ].join("\n");
+
+    const imports = parseImports(source).filter((id) => id !== "assert" && id !== "expect");
+    const { allTests } = parseTestFile(source);
+    const finding = checkNoProductionCall(allTests[0], imports);
+    assert.notEqual(finding, null);
+    assert.equal(finding?.rule, "no_production_call");
+  });
+
+  // Defect: if no_production_call fires when production code IS called, the rule produces false positives and becomes useless.
+  it("does not fire when imported function is called", () => {
+    const source = [
+      'import { computeScore } from "./scoring.ts";',
+      'describe("X", () => {',
+      '  it("uses production code", () => {',
+      "    const result = computeScore(10, 20);",
+      "    assert.equal(result, 30);",
+      "  });",
+      "});",
+    ].join("\n");
+
+    const imports = parseImports(source).filter((id) => id !== "assert" && id !== "expect");
+    const { allTests } = parseTestFile(source);
+    assert.equal(checkNoProductionCall(allTests[0], imports), null);
+  });
+
+  // Defect: if no_production_call counts framework imports as production calls, tests using only fc/assert pass the rule despite calling no real code.
+  it("ignores framework imports (assert, fc, expect)", () => {
+    const source = [
+      'import { assert } from "node:assert";',
+      'import fc from "fast-check";',
+      'import { computeScore } from "./scoring.ts";',
+      'describe("X", () => {',
+      '  it("framework only", () => {',
+      "    fc.assert(fc.property(fc.integer(), (n) => n >= 0));",
+      "  });",
+      "});",
+    ].join("\n");
+
+    const imports = parseImports(source).filter(
+      (id) => !["assert", "expect", "fc", "describe", "it", "test"].includes(id),
+    );
+    const { allTests } = parseTestFile(source);
+    const finding = checkNoProductionCall(allTests[0], imports);
+    assert.notEqual(finding, null);
+    assert.equal(finding?.rule, "no_production_call");
+  });
+
+  // Defect: if no_production_call fires when there are no imports, every test in standalone files gets flagged.
+  it("does not fire when there are no production imports", () => {
+    const block = makeTestBlock({
+      bodyLines: ["    const x = 1 + 2;", "    assert.equal(x, 3);"],
+    });
+    assert.equal(checkNoProductionCall(block, []), null);
+  });
+
+  // Defect: if no_production_call doesn't fire through analyzeTestFile, the rule is wired incorrectly and invisible in reports.
+  it("fires through analyzeTestFile", () => {
+    const source = [
+      'import { computeScore } from "./scoring.ts";',
+      'describe("X", () => {',
+      '  it("arithmetic only", () => {',
+      "    const net = -100 + 49;",
+      "    assert.ok(net < 0);",
+      "  });",
+      "});",
+    ].join("\n");
+
+    const report = analyzeTestFile(source, "test.ts");
+    assert.ok(report.findings.some((f) => f.rule === "no_production_call"));
+  });
+});
+
+describe("parseImports", () => {
+  // slop-ignore: no_negative_test, duplicate_assertion_set, no_input_variation — import parser tests intentionally reuse assertion shapes.
+
+  // Defect: if parseImports misses named imports, no_production_call fails to detect unused production imports.
+  it("extracts named imports", () => {
+    const source = 'import { foo, bar as baz } from "./module.ts";';
+    const imports = parseImports(source);
+    assert.deepEqual(imports, ["foo", "baz"]);
+  });
+
+  // Defect: if parseImports extracts type-only imports, no_production_call falsely clears tests that only import types.
+  it("skips type-only imports", () => {
+    const source = 'import type { Foo } from "./module.ts";';
+    const imports = parseImports(source);
+    assert.deepEqual(imports, []);
+  });
+
+  // Defect: if parseImports misses default imports, functions imported as default go untracked.
+  it("extracts default imports", () => {
+    const source = 'import myModule from "./module.ts";';
+    const imports = parseImports(source);
+    assert.deepEqual(imports, ["myModule"]);
+  });
+
+  // Defect: if parseImports misses namespace imports, import * as X patterns go untracked.
+  it("extracts namespace imports", () => {
+    const source = 'import * as utils from "./utils.ts";';
+    const imports = parseImports(source);
+    assert.deepEqual(imports, ["utils"]);
+  });
+});
+
+describe("checkImpossibleAssertion", () => {
+  // slop-ignore: no_negative_test, duplicate_assertion_set, no_input_variation — rule-unit tests for impossible_assertion intentionally reuse assertion shapes.
+
+  // Defect: if impossible_assertion doesn't flag .length >= 0 checks, tautological array length assertions go undetected.
+  it("fires on expect(x.length).toBeGreaterThanOrEqual(0)", () => {
+    const source = [
+      'describe("X", () => {',
+      '  it("checks length", () => {',
+      "    const keys = Object.keys(obj);",
+      "    expect(keys.length).toBeGreaterThanOrEqual(0);",
+      "  });",
+      "});",
+    ].join("\n");
+
+    const { allTests } = parseTestFile(source);
+    const findings = checkImpossibleAssertion(allTests[0]);
+    assert.equal(findings.length, 1);
+    assert.equal(findings[0].rule, "impossible_assertion");
+    assert.ok(findings[0].message.includes("always >= 0"));
+  });
+
+  // Defect: if impossible_assertion fires on real assertions like .toBeGreaterThanOrEqual(1), legitimate tests are falsely flagged.
+  it("does not fire on non-zero length assertions", () => {
+    const source = [
+      'describe("X", () => {',
+      '  it("checks length", () => {',
+      "    expect(items.length).toBeGreaterThanOrEqual(1);",
+      "  });",
+      "});",
+    ].join("\n");
+
+    const { allTests } = parseTestFile(source);
+    const findings = checkImpossibleAssertion(allTests[0]);
+    assert.equal(findings.length, 0);
+  });
+
+  // Defect: if impossible_assertion doesn't fire on assert.ok(.length >= 0), the node:assert variant of the pattern goes undetected.
+  it("fires on assert.ok(x.length >= 0)", () => {
+    const source = [
+      'describe("X", () => {',
+      '  it("checks length", () => {',
+      "    assert.ok(items.length >= 0);",
+      "  });",
+      "});",
+    ].join("\n");
+
+    const { allTests } = parseTestFile(source);
+    const findings = checkImpossibleAssertion(allTests[0]);
+    assert.equal(findings.length, 1);
+  });
+
+  // Defect: if impossible_assertion fires through analyzeTestFile incorrectly, the rule is wired wrong.
+  it("fires through analyzeTestFile", () => {
+    const source = [
+      'describe("X", () => {',
+      '  it("tautological length", () => {',
+      "    expect(Object.keys(obj).length).toBeGreaterThanOrEqual(0);",
+      "  });",
+      "});",
+    ].join("\n");
+
+    const report = analyzeTestFile(source, "test.ts");
+    assert.ok(report.findings.some((f) => f.rule === "impossible_assertion"));
   });
 });
 
