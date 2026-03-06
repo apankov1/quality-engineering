@@ -199,6 +199,12 @@ describe("analyzeFaultSurface detectors", () => {
       assert.ok(surfaceHasPattern(surface, "division-op"));
     });
 
+    // Defect: detector misses compact division syntax without spaces
+    it("fires on division without spaces", () => {
+      const surface = analyzeFaultSurface("const avg=sum/count;");
+      assert.ok(surfaceHasPattern(surface, "division-op"));
+    });
+
     // Defect: false positive on import/from statements
     it("does not fire on import statement", () => {
       const surface = analyzeFaultSurface('import { x } from "./module";');
