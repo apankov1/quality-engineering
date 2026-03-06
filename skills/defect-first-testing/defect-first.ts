@@ -117,7 +117,71 @@ export function stripNonCode(line: string): string {
   return result;
 }
 
-// --- Fault pattern table (15 detectors) ---
+function stripLineForAnalysis(line: string, inBlockComment: boolean): { cleaned: string; inBlockComment: boolean } {
+  let cleaned = "";
+  let inString: string | null = null;
+  let escaped = false;
+
+  for (let i = 0; i < line.length; i++) {
+    const ch = line[i];
+    const next = line[i + 1] ?? "";
+
+    if (inBlockComment) {
+      if (ch === "*" && next === "/") {
+        inBlockComment = false;
+        i++;
+      }
+      continue;
+    }
+
+    if (inString) {
+      if (escaped) {
+        escaped = false;
+        continue;
+      }
+      if (ch === "\\") {
+        escaped = true;
+        continue;
+      }
+      if (ch === inString) {
+        inString = null;
+        cleaned += ch;
+      }
+      continue;
+    }
+
+    if (ch === "'" || ch === '"' || ch === "`") {
+      inString = ch;
+      cleaned += ch;
+      continue;
+    }
+
+    if (ch === "/" && next === "*") {
+      inBlockComment = true;
+      i++;
+      continue;
+    }
+
+    if (ch === "/" && next === "/") {
+      break;
+    }
+
+    cleaned += ch;
+  }
+
+  return { cleaned, inBlockComment };
+}
+
+function normalizeCommentText(text: string): string {
+  return text
+    .toLowerCase()
+    .replace(/[_/]+/g, " ")
+    .replace(/[^a-z0-9\s-]/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+// --- Fault pattern table (16 detectors) ---
 
 const FAULT_DETECTORS: FaultDetector[] = [
   {
@@ -348,27 +412,11 @@ export function analyzeFaultSurface(source: string): FaultSurface {
   let inBlockComment = false;
 
   for (let i = 0; i < lines.length; i++) {
-    const trimmed = lines[i].trim();
+    const line = lines[i];
+    const stripped = stripLineForAnalysis(line, inBlockComment);
+    inBlockComment = stripped.inBlockComment;
 
-    // Track block comments
-    if (inBlockComment) {
-      if (trimmed.includes("*/")) {
-        inBlockComment = false;
-      }
-      continue;
-    }
-    if (trimmed.startsWith("/*")) {
-      if (!trimmed.includes("*/")) {
-        inBlockComment = true;
-      }
-      continue;
-    }
-
-    // Skip pure comment lines and empty lines
-    if (trimmed.startsWith("//") || trimmed === "") continue;
-
-    // Strip string contents and trailing comments for pattern matching
-    const cleaned = stripNonCode(trimmed);
+    const cleaned = stripped.cleaned.trim();
     if (cleaned.trim() === "") continue;
 
     for (const detector of FAULT_DETECTORS) {
@@ -381,7 +429,7 @@ export function analyzeFaultSurface(source: string): FaultSurface {
 
       entries.push({
         line: i + 1,
-        code: trimmed,
+        code: line.trim(),
         pattern: detector.id,
         category: detector.category,
         defectClasses: [...detector.defectClasses],
