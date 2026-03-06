@@ -1,6 +1,6 @@
 ---
 name: slop-test-detector
-description: "Static analyzer that detects 15 slop patterns in test code — tests that compile and pass but catch zero bugs."
+description: "Static analyzer that detects 18 slop patterns in test code — tests that compile and pass but catch zero bugs."
 ---
 
 # Slop Test Detector
@@ -36,6 +36,9 @@ Before auditing or generating tests, identify which slop patterns apply:
 | Tests vary their inputs | Do sibling tests exercise different code paths? | `no_input_variation`, `duplicate_assertion_set` |
 | Assertions test computed values | Are assertions checking results, not echoing construction literals? | `literal_roundtrip`, `schema_success_only` |
 | Assertions always execute | Can the test pass without any assertion running? | `conditional_assertion` |
+| Property tests are meaningful | Do fc.property callbacks assert on all paths with varied inputs? | `vacuous_property` |
+| Tests exercise production code | Does the test call an imported function, not just builtins? | `no_production_call` |
+| Assertions can actually fail | Is the assertion mathematically capable of failing? | `impossible_assertion` |
 
 ---
 
@@ -64,6 +67,7 @@ import {
   formatReport,
   formatReportJSON,
   getPreset,
+  parseImports,
   parseTestFile,
 } from './slop-detector.ts';
 ```
@@ -76,9 +80,9 @@ Three built-in presets control which rules are active:
 
 | Preset | Rules | Default threshold | Use case |
 |--------|-------|-------------------|----------|
-| `balanced` | 10 rules (no defect-comment rules) | 80 | **Default.** Conservative, low noise |
-| `strict` | All 12 rules | 90 | Teams that enforce `// Defect:` comments |
-| `advisory` | All 12 rules | 0 | Report everything, fail nothing |
+| `balanced` | 16 rules (no defect-comment rules) | 80 | **Default.** Conservative, low noise |
+| `strict` | All 18 rules | 90 | Teams that enforce `// Defect:` comments |
+| `advisory` | All 18 rules | 0 | Report everything, fail nothing |
 
 ```typescript
 import { getPreset } from './slop-detector.ts';
@@ -188,6 +192,9 @@ score = max(0, round(100 × (1 - weightedFindings / testCount)))
 | `literal_roundtrip` | Assertion compares `obj.field` to the same literal used to construct `obj` | should-fail | on |
 | `schema_success_only` | `safeParse()` result checked for `.success` but never `.data` or `.error.issues` | should-fail | on |
 | `conditional_assertion` | All assertions are inside `if`/`switch` blocks — test may silently pass | must-fail | on |
+| `vacuous_property` | `fc.property` callback has `return true` path with zero assertions, or all generators are `fc.constant` | should-fail | on |
+| `no_production_call` | Test body calls no imported production function — only builtins or language guarantees | should-fail | on |
+| `impossible_assertion` | Assertion is mathematically impossible to fail (e.g., `.length >= 0`) | should-fail | on |
 
 **opt-in** rules are only active in the `strict` preset. Use `getPreset('strict')` or add them to a custom `enabledRules` set.
 
