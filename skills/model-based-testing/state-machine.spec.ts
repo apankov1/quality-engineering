@@ -398,9 +398,6 @@ describe("integration: workflow state machine", () => {
 
   // Defect: invalid workflow jumps must fail loudly in assertion helpers to prevent silent invalid state transitions.
   it("throws on impossible workflow jump", () => {
-    assert.throws(
-      () => assertTransition(workflow, "draft", "published"),
-      /Invalid transition: draft -> published/,
-    );
+    assert.throws(() => assertTransition(workflow, "draft", "published"), /Invalid transition: draft -> published/);
   });
 });
