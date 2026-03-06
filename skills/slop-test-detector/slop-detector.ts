@@ -142,6 +142,105 @@ export function getPreset(name: "strict" | "balanced" | "advisory"): SlopConfig 
 const DEFAULT_CONFIG: SlopConfig = getPreset("balanced");
 
 const SLOP_IGNORE_RE = /\/\/\s*slop-ignore:\s*([\w,\s]+?)\s*—\s*(.+?)\s*$/;
+
+// Vitest/Jest/Chai expect matchers mapped to assert.* equivalents for rule analysis.
+// Function-call matchers: expect(x).matcher(y) — both vitest-style (toEqual) and chai-style (equal).
+const EXPECT_MATCHER_MAP: Record<string, { method: string; hasArg: boolean }> = {
+  // vitest / jest
+  toBe: { method: "equal", hasArg: true },
+  toEqual: { method: "deepEqual", hasArg: true },
+  toStrictEqual: { method: "deepStrictEqual", hasArg: true },
+  toBeTruthy: { method: "ok", hasArg: false },
+  toBeFalsy: { method: "ok", hasArg: false },
+  toBeDefined: { method: "ok", hasArg: false },
+  toBeUndefined: { method: "ok", hasArg: false },
+  toBeNull: { method: "ok", hasArg: false },
+  toBeNaN: { method: "ok", hasArg: false },
+  toThrow: { method: "throws", hasArg: false },
+  toThrowError: { method: "throws", hasArg: false },
+  toMatch: { method: "match", hasArg: true },
+  toMatchObject: { method: "deepEqual", hasArg: true },
+  toContain: { method: "deepEqual", hasArg: true },
+  toContainEqual: { method: "deepEqual", hasArg: true },
+  toHaveLength: { method: "equal", hasArg: true },
+  toHaveProperty: { method: "equal", hasArg: true },
+  toBeGreaterThan: { method: "equal", hasArg: true },
+  toBeGreaterThanOrEqual: { method: "equal", hasArg: true },
+  toBeLessThan: { method: "equal", hasArg: true },
+  toBeLessThanOrEqual: { method: "equal", hasArg: true },
+  toBeInstanceOf: { method: "equal", hasArg: true },
+  toBeCloseTo: { method: "equal", hasArg: true },
+  toHaveBeenCalled: { method: "ok", hasArg: false },
+  toHaveBeenCalledWith: { method: "equal", hasArg: true },
+  toHaveBeenCalledTimes: { method: "equal", hasArg: true },
+  toMatchSnapshot: { method: "ok", hasArg: false },
+  toMatchInlineSnapshot: { method: "ok", hasArg: false },
+  // chai function-call matchers
+  equal: { method: "equal", hasArg: true },
+  equals: { method: "equal", hasArg: true },
+  eql: { method: "deepEqual", hasArg: true },
+  eqls: { method: "deepEqual", hasArg: true },
+  above: { method: "equal", hasArg: true },
+  below: { method: "equal", hasArg: true },
+  least: { method: "equal", hasArg: true },
+  most: { method: "equal", hasArg: true },
+  within: { method: "equal", hasArg: true },
+  instanceof: { method: "equal", hasArg: true },
+  property: { method: "equal", hasArg: true },
+  lengthOf: { method: "equal", hasArg: true },
+  match: { method: "match", hasArg: true },
+  matches: { method: "match", hasArg: true },
+  throw: { method: "throws", hasArg: false },
+  throws: { method: "throws", hasArg: false },
+  Throw: { method: "throws", hasArg: false },
+  include: { method: "deepEqual", hasArg: true },
+  includes: { method: "deepEqual", hasArg: true },
+  contain: { method: "deepEqual", hasArg: true },
+  contains: { method: "deepEqual", hasArg: true },
+  satisfy: { method: "ok", hasArg: true },
+  satisfies: { method: "ok", hasArg: true },
+  closeTo: { method: "equal", hasArg: true },
+  oneOf: { method: "deepEqual", hasArg: true },
+};
+
+// Chai property assertions — no parens: expect(x).to.be.true;
+const EXPECT_PROPERTY_MAP: Record<string, string> = {
+  ok: "ok",
+  true: "ok",
+  false: "ok",
+  null: "ok",
+  undefined: "ok",
+  NaN: "ok",
+  exist: "ok",
+  empty: "ok",
+  finite: "ok",
+  sealed: "ok",
+  frozen: "ok",
+};
+
+// Chai language chain words — passthrough with no semantic effect (except not/deep/rejects/resolves).
+const EXPECT_CHAIN_PASSTHROUGHS = new Set([
+  "to",
+  "be",
+  "been",
+  "is",
+  "has",
+  "have",
+  "that",
+  "which",
+  "and",
+  "with",
+  "at",
+  "of",
+  "same",
+  "but",
+  "does",
+  "still",
+  "also",
+]);
+
+const EXPECT_CALL_RE = /\bexpect\s*\(/;
+
 const ASSERT_METHODS = [
   "equal",
   "ok",
@@ -414,6 +513,175 @@ function findAssertCallInCode(line: string): { method: string; argsStart: number
   return found;
 }
 
+function findExpectInCode(line: string): { openParenPos: number } | null {
+  let found: { openParenPos: number } | null = null;
+  const identChar = /[A-Za-z0-9_$]/;
+
+  scanCode({
+    text: line,
+    onCode(_ch, i) {
+      if (!line.startsWith("expect", i)) return;
+      const prev = i > 0 ? line[i - 1] : "";
+      if (prev && identChar.test(prev)) return;
+      let j = i + "expect".length;
+      while (line[j] === " " || line[j] === "\t") j++;
+      if (line[j] !== "(") return;
+      found = { openParenPos: j };
+      return "stop";
+    },
+    onLineComment() {
+      return "stop";
+    },
+  });
+
+  return found;
+}
+
+function parseExpectExpression(text: string, openParenPos: number): { method: string; args: string } | null {
+  // 1. Extract actual arg via paren balancing
+  let depth = 1;
+  let closeParen = -1;
+  scanCode({
+    text,
+    start: openParenPos + 1,
+    onCode(ch, i) {
+      if (ch === "(") depth++;
+      else if (ch === ")") {
+        depth--;
+        if (depth === 0) {
+          closeParen = i;
+          return "stop";
+        }
+      }
+    },
+  });
+  if (closeParen < 0) return null;
+
+  const actualExpr = text.slice(openParenPos + 1, closeParen).trim();
+
+  // 2. Parse chain after closing paren: modifiers then .matcher(args) or .property
+  let pos = closeParen + 1;
+  let isRejects = false;
+  let isDeep = false;
+  const identRe = /[a-zA-Z0-9_$]/;
+
+  while (pos < text.length) {
+    // Skip whitespace (including newlines in combined text)
+    while (pos < text.length && /\s/.test(text[pos])) pos++;
+    if (pos >= text.length || text[pos] !== ".") return null;
+    pos++; // skip dot
+    while (pos < text.length && /\s/.test(text[pos])) pos++;
+
+    // Read identifier
+    const identStart = pos;
+    while (pos < text.length && identRe.test(text[pos])) pos++;
+    const ident = text.slice(identStart, pos);
+
+    // Chain modifiers: not, resolves, rejects, deep, and chai language chains
+    if (ident === "not" || EXPECT_CHAIN_PASSTHROUGHS.has(ident)) continue;
+    if (ident === "resolves") continue;
+    if (ident === "rejects") {
+      isRejects = true;
+      continue;
+    }
+    if (
+      ident === "deep" ||
+      ident === "nested" ||
+      ident === "ordered" ||
+      ident === "own" ||
+      ident === "any" ||
+      ident === "all"
+    ) {
+      if (ident === "deep") isDeep = true;
+      continue;
+    }
+
+    // Check for function-call matcher: .matcher(args)
+    const matcherInfo = EXPECT_MATCHER_MAP[ident];
+    // Skip whitespace before potential (
+    let peekPos = pos;
+    while (peekPos < text.length && /\s/.test(text[peekPos])) peekPos++;
+
+    if (matcherInfo && peekPos < text.length && text[peekPos] === "(") {
+      pos = peekPos + 1; // skip (
+      const { args: matcherArgs, complete } = extractArgsFromLine(text, pos);
+      if (!complete) return null;
+
+      // If chai .deep.equal → map to deepEqual instead of equal
+      let method = matcherInfo.method;
+      if (isDeep && method === "equal") method = "deepEqual";
+      if (isRejects && (method === "throws" || method === "ok")) method = "rejects";
+
+      let mappedArgs: string;
+      if (method === "throws" || method === "rejects") {
+        mappedArgs = actualExpr;
+      } else if (matcherInfo.hasArg && matcherArgs.trim()) {
+        mappedArgs = `${actualExpr}, ${matcherArgs}`;
+      } else {
+        mappedArgs = actualExpr;
+      }
+
+      return { method, args: mappedArgs };
+    }
+
+    // Check for chai property assertion (no parens): expect(x).to.be.true;
+    const propertyMethod = EXPECT_PROPERTY_MAP[ident];
+    if (propertyMethod) {
+      return { method: propertyMethod, args: actualExpr };
+    }
+
+    return null;
+  }
+
+  return null;
+}
+
+function tryExtractExpect(
+  testLine: string,
+  isCommented: boolean,
+  bodyLines: string[],
+  lineIndex: number,
+  baseLineNumber: number,
+  rawTrimmed: string,
+): ParsedAssertion | null {
+  // Find expect( — use code-aware scan for active lines, regex for commented
+  let openParenPos: number;
+  if (isCommented) {
+    const match = EXPECT_CALL_RE.exec(testLine);
+    if (!match) return null;
+    openParenPos = match.index + match[0].length - 1;
+  } else {
+    const result = findExpectInCode(testLine);
+    if (!result) return null;
+    openParenPos = result.openParenPos;
+  }
+
+  // Try parsing on current line
+  let parsed = parseExpectExpression(testLine, openParenPos);
+
+  if (!parsed) {
+    // Combine with subsequent lines until chain is complete
+    let combined = stripTrailingLineComment(testLine);
+    for (let j = lineIndex + 1; j < bodyLines.length; j++) {
+      const nextTrimmed = bodyLines[j].trimStart();
+      const nextLine = isCommented && nextTrimmed.startsWith("//") ? nextTrimmed.slice(2).trimStart() : nextTrimmed;
+      combined += ` ${stripTrailingLineComment(nextLine)}`;
+      parsed = parseExpectExpression(combined, openParenPos);
+      if (parsed) break;
+    }
+  }
+
+  if (!parsed) return null;
+
+  return {
+    lineNumber: baseLineNumber + lineIndex,
+    raw: rawTrimmed,
+    method: parsed.method,
+    args: parsed.args,
+    isCommented,
+  };
+}
+
 function extractAssertions(bodyLines: string[], baseLineNumber: number): ParsedAssertion[] {
   const results: ParsedAssertion[] = [];
 
@@ -428,12 +696,22 @@ function extractAssertions(bodyLines: string[], baseLineNumber: number): ParsedA
 
     if (isCommented) {
       const match = ASSERT_MODULE_RE.exec(testLine);
-      if (!match) continue;
+      if (!match) {
+        // Try expect() for commented lines
+        const expectAssertion = tryExtractExpect(testLine, true, bodyLines, i, baseLineNumber, trimmed);
+        if (expectAssertion) results.push(expectAssertion);
+        continue;
+      }
       method = match[1];
       argsStart = match.index + match[0].length;
     } else {
       const call = findAssertCallInCode(testLine);
-      if (!call) continue;
+      if (!call) {
+        // Try expect() for active lines
+        const expectAssertion = tryExtractExpect(testLine, false, bodyLines, i, baseLineNumber, trimmed);
+        if (expectAssertion) results.push(expectAssertion);
+        continue;
+      }
       method = call.method;
       argsStart = call.argsStart;
     }
@@ -494,6 +772,7 @@ function countAssertionEquivs(bodyLines: string[], allowlist: string[]): number 
     const trimmed = line.trimStart();
     if (trimmed.startsWith("//")) continue;
     if (ASSERT_MODULE_RE.test(trimmed)) continue;
+    if (EXPECT_CALL_RE.test(trimmed)) continue;
     if (hasAllowlistedCall(line)) count++;
   }
   return count;

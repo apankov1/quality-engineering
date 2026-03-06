@@ -37,6 +37,22 @@ Before auditing or generating tests, identify which slop patterns apply:
 
 ---
 
+## Assertion API Support
+
+The detector recognizes `node:assert`, vitest/Jest `expect()`, and chai `expect()` patterns:
+
+| `node:assert` | vitest/Jest | chai | Mapped rule check |
+|---|---|---|---|
+| `assert.equal(x, y)` | `expect(x).toBe(y)` | `expect(x).to.equal(y)` | tautological, self-referential, type-not-value |
+| `assert.deepEqual(x, y)` | `expect(x).toEqual(y)` | `expect(x).to.deep.equal(y)` | self-referential, duplicate |
+| `assert.ok(x)` | `expect(x).toBeTruthy()` | `expect(x).to.be.ok` | truthiness-only, return-type-only |
+| `assert.throws(fn)` | `expect(fn).toThrow()` | `expect(fn).to.throw()` | no-negative-test |
+| `assert.rejects(p)` | `expect(p).rejects.toThrow()` | — | no-negative-test |
+
+Chain modifiers `.not`, `.resolves`, `.rejects` and chai language chains (`.to`, `.be`, `.have`, `.been`, etc.) are handled. Multiline chains (matcher on next line) are supported. Commented-out `expect()` calls are detected. Chai property assertions (`expect(x).to.be.true`) are supported.
+
+---
+
 ## Included Utilities
 
 ```typescript
