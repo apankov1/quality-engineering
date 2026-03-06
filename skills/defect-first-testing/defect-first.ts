@@ -400,6 +400,24 @@ const DEFECT_TEMPLATES: Record<DefectClass, { name: string; inputs: string; expe
   },
 };
 
+const DEFECT_ALIASES: Record<DefectClass, readonly string[]> = {
+  "off-by-one": ["off by one", "index boundary", "loop boundary"],
+  "boundary-zero": ["boundary zero", "zero boundary"],
+  "empty-collection": ["empty collection", "empty array", "empty list"],
+  "negative-input": ["negative input", "negative value", "negative number"],
+  "null-undefined": ["null undefined", "null or undefined", "null/undefined"],
+  "type-coercion": ["type coercion", "implicit coercion"],
+  "division-by-zero": ["division by zero", "divide by zero", "zero divisor"],
+  "nan-propagation": ["nan propagation", "not a number propagation"],
+  "empty-string": ["empty string", "blank string", "whitespace only"],
+  "missing-error-path": ["missing error path", "error path missing", "no error path"],
+  "swallowed-error": ["swallowed error", "error swallowed", "silent error"],
+  "wrong-error-type": ["wrong error type", "incorrect error type", "unexpected error type"],
+  "shared-mutation": ["shared mutation", "in-place mutation", "mutates input", "mutation side effect"],
+  "missing-branch": ["missing branch", "uncovered branch", "default branch missing"],
+  "unhandled-rejection": ["unhandled rejection", "promise rejection unhandled"],
+};
+
 // --- Exported detector count for tests ---
 
 export const DETECTOR_COUNT = FAULT_DETECTORS.length;
