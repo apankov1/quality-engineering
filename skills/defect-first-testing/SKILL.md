@@ -139,4 +139,4 @@ If you can't name the bug, don't write the test.
 
 ## Reference
 
-See [references/fault-catalog.md](references/fault-catalog.md) for the complete catalog of 15 code patterns and their associated defect classes, with before/after examples.
+See [references/fault-catalog.md](references/fault-catalog.md) for the complete catalog of 16 code patterns and their associated defect classes, with before/after examples.
