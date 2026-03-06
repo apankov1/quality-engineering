@@ -309,6 +309,18 @@ describe("analyzeFaultSurface comment handling", () => {
     assert.equal(surface.entries.length, 0);
   });
 
+  // Defect: line with /* ... */ and trailing code is skipped entirely
+  it("detects code after single-line block comment", () => {
+    const surface = analyzeFaultSurface("/* comment */ if (x < 0) {}");
+    assert.ok(surfaceHasPattern(surface, "comparison-boundary"));
+  });
+
+  // Defect: inline block comment text is parsed as executable code
+  it("ignores patterns inside inline block comments", () => {
+    const surface = analyzeFaultSurface("const x = 1; /* if (i < arr.length) {} */");
+    assert.equal(surface.entries.length, 0);
+  });
+
   // Defect: empty input causes crash
   it("handles empty source", () => {
     const surface = analyzeFaultSurface("");
