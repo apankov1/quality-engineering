@@ -1254,6 +1254,471 @@ describe("validateTestBlock", () => {
 });
 
 // ============================================================================
+// VITEST/JEST expect() SUPPORT
+// ============================================================================
+
+describe("expect() parsing", () => {
+  // slop-ignore: no_negative_test, duplicate_assertion_set, no_input_variation — rule-unit tests for expect() support intentionally reuse assertion shapes.
+
+  // Defect: if parser doesn't recognize expect().toBe(), vitest tests are invisible to the detector — all 12 rules produce wrong results on vitest codebases.
+  it("parses expect(x).toBe(y) as method=equal", () => {
+    const source = [
+      'describe("X", () => {',
+      '  it("checks value", () => {',
+      "    expect(result).toBe(42);",
+      "  });",
+      "});",
+    ].join("\n");
+
+    const { allTests } = parseTestFile(source);
+    assert.equal(allTests[0].assertions.length, 1);
+    assert.equal(allTests[0].assertions[0].method, "equal");
+    assert.equal(allTests[0].assertions[0].args, "result, 42");
+    assert.equal(allTests[0].assertions[0].isCommented, false);
+  });
+
+  // Defect: if parser doesn't recognize toEqual, deep equality checks in vitest are invisible and duplicate_assertion_set normalization fails.
+  it("parses expect(x).toEqual(y) as method=deepEqual", () => {
+    const source = [
+      'describe("X", () => {',
+      '  it("deep check", () => {',
+      "    expect(result).toEqual({ a: 1 });",
+      "  });",
+      "});",
+    ].join("\n");
+
+    const { allTests } = parseTestFile(source);
+    assert.equal(allTests[0].assertions[0].method, "deepEqual");
+    assert.equal(allTests[0].assertions[0].args, "result, { a: 1 }");
+  });
+
+  // Defect: if parser doesn't map toBeTruthy to ok, truthiness_only rule cannot fire on vitest code.
+  it("parses expect(x).toBeTruthy() as method=ok", () => {
+    const source = [
+      'describe("X", () => {',
+      '  it("truthy check", () => {',
+      "    expect(result).toBeTruthy();",
+      "  });",
+      "});",
+    ].join("\n");
+
+    const { allTests } = parseTestFile(source);
+    assert.equal(allTests[0].assertions[0].method, "ok");
+    assert.equal(allTests[0].assertions[0].args, "result");
+  });
+
+  // Defect: if parser doesn't recognize toThrow, no_negative_test rule cannot detect vitest error-path tests.
+  it("parses expect(() => fn()).toThrow() as method=throws", () => {
+    const source = [
+      'describe("X", () => {',
+      '  it("throws check", () => {',
+      "    expect(() => riskyFn()).toThrow();",
+      "  });",
+      "});",
+    ].join("\n");
+
+    const { allTests } = parseTestFile(source);
+    assert.equal(allTests[0].assertions[0].method, "throws");
+    assert.equal(allTests[0].assertions[0].args, "() => riskyFn()");
+  });
+
+  // Defect: if parser doesn't handle .rejects chain, async error-path tests in vitest are invisible to no_negative_test.
+  it("parses expect(promise).rejects.toThrow() as method=rejects", () => {
+    const source = [
+      'describe("X", () => {',
+      '  it("rejects check", () => {',
+      "    expect(promise).rejects.toThrow();",
+      "  });",
+      "});",
+    ].join("\n");
+
+    const { allTests } = parseTestFile(source);
+    assert.equal(allTests[0].assertions[0].method, "rejects");
+  });
+
+  // Defect: if parser doesn't handle .not chain, negated matchers are not counted as assertions and trigger false empty_test_body.
+  it("parses expect(x).not.toBe(y) as assertion", () => {
+    const source = [
+      'describe("X", () => {',
+      '  it("not check", () => {',
+      "    expect(result).not.toBe(null);",
+      "  });",
+      "});",
+    ].join("\n");
+
+    const { allTests } = parseTestFile(source);
+    assert.equal(allTests[0].assertions.length, 1);
+    assert.equal(allTests[0].assertions[0].method, "equal");
+  });
+
+  // Defect: if parser can't handle multiline expect chains, tests with chain on next line are invisible.
+  it("handles expect chain split across lines", () => {
+    const source = [
+      'describe("X", () => {',
+      '  it("multiline", () => {',
+      "    expect(result)",
+      "      .toBe(42);",
+      "  });",
+      "});",
+    ].join("\n");
+
+    const { allTests } = parseTestFile(source);
+    assert.equal(allTests[0].assertions.length, 1);
+    assert.equal(allTests[0].assertions[0].method, "equal");
+    assert.equal(allTests[0].assertions[0].args, "result, 42");
+  });
+
+  // Defect: if parser doesn't detect commented expect(), checkCommentedOutAssertions misses vitest commented assertions entirely.
+  it("detects commented-out expect() as commented assertion", () => {
+    const source = [
+      'describe("X", () => {',
+      '  it("commented", () => {',
+      "    // expect(result).toBe(42);",
+      "  });",
+      "});",
+    ].join("\n");
+
+    const { allTests } = parseTestFile(source);
+    assert.equal(allTests[0].assertions.length, 1);
+    assert.equal(allTests[0].assertions[0].isCommented, true);
+    assert.equal(allTests[0].assertions[0].method, "equal");
+  });
+
+  // Defect: if expect inside a string literal is counted as assertion, tests that mention expect in strings get false negative on empty_test_body.
+  it("does not count expect inside string literal", () => {
+    const source = [
+      'describe("X", () => {',
+      '  it("string mention", () => {',
+      '    const msg = "expect(x).toBe(y)";',
+      "  });",
+      "});",
+    ].join("\n");
+
+    const { allTests } = parseTestFile(source);
+    assert.equal(allTests[0].assertions.length, 0);
+  });
+
+  // Defect: if mixed assert + expect aren't both counted, tests using both APIs have incorrect assertion count.
+  it("handles mixed assert.* and expect() in same test", () => {
+    const source = [
+      'describe("X", () => {',
+      '  it("mixed", () => {',
+      "    assert.equal(a, 1);",
+      "    expect(b).toBe(2);",
+      "  });",
+      "});",
+    ].join("\n");
+
+    const { allTests } = parseTestFile(source);
+    assert.equal(allTests[0].assertions.length, 2);
+    assert.equal(allTests[0].assertions[0].method, "equal");
+    assert.equal(allTests[0].assertions[1].method, "equal");
+  });
+});
+
+describe("chai expect() parsing", () => {
+  // slop-ignore: no_negative_test, duplicate_assertion_set, no_input_variation — rule-unit tests for chai support intentionally reuse assertion shapes.
+
+  // Defect: if parser doesn't handle chai .to.equal() chains, chai codebases are invisible to the detector — same impact as #13 vitest blindness.
+  it("parses expect(x).to.equal(y) as method=equal", () => {
+    const source = [
+      'describe("X", () => {',
+      '  it("chai equal", () => {',
+      "    expect(result).to.equal(42);",
+      "  });",
+      "});",
+    ].join("\n");
+
+    const { allTests } = parseTestFile(source);
+    assert.equal(allTests[0].assertions.length, 1);
+    assert.equal(allTests[0].assertions[0].method, "equal");
+    assert.equal(allTests[0].assertions[0].args, "result, 42");
+  });
+
+  // Defect: if parser doesn't handle .to.deep.equal(), chai deep equality checks are invisible — duplicate_assertion_set can't normalize them.
+  it("parses expect(x).to.deep.equal(y) as method=deepEqual", () => {
+    const source = [
+      'describe("X", () => {',
+      '  it("chai deep equal", () => {',
+      "    expect(result).to.deep.equal({ a: 1 });",
+      "  });",
+      "});",
+    ].join("\n");
+
+    const { allTests } = parseTestFile(source);
+    assert.equal(allTests[0].assertions[0].method, "deepEqual");
+    assert.equal(allTests[0].assertions[0].args, "result, { a: 1 }");
+  });
+
+  // Defect: if parser doesn't handle chai .to.throw(), no_negative_test can't detect chai error-path tests.
+  it("parses expect(fn).to.throw() as method=throws", () => {
+    const source = [
+      'describe("X", () => {',
+      '  it("chai throw", () => {',
+      "    expect(() => riskyFn()).to.throw();",
+      "  });",
+      "});",
+    ].join("\n");
+
+    const { allTests } = parseTestFile(source);
+    assert.equal(allTests[0].assertions[0].method, "throws");
+  });
+
+  // Defect: if parser doesn't handle chai property assertions (no parens), expect(x).to.be.true is invisible — zero assertions detected.
+  it("parses chai property assertion expect(x).to.be.true", () => {
+    const source = [
+      'describe("X", () => {',
+      '  it("chai property", () => {',
+      "    expect(result).to.be.true;",
+      "  });",
+      "});",
+    ].join("\n");
+
+    const { allTests } = parseTestFile(source);
+    assert.equal(allTests[0].assertions.length, 1);
+    assert.equal(allTests[0].assertions[0].method, "ok");
+    assert.equal(allTests[0].assertions[0].args, "result");
+  });
+
+  // Defect: if parser doesn't handle expect(x).to.be.ok, chai truthiness checks are invisible to truthiness_only rule.
+  it("parses expect(x).to.be.ok as method=ok", () => {
+    const source = [
+      'describe("X", () => {',
+      '  it("chai ok", () => {',
+      "    expect(result).to.be.ok;",
+      "  });",
+      "});",
+    ].join("\n");
+
+    const { allTests } = parseTestFile(source);
+    assert.equal(allTests[0].assertions[0].method, "ok");
+  });
+
+  // Defect: if parser doesn't handle .not.to.equal(), chai negated assertions trigger false empty_test_body.
+  it("parses expect(x).to.not.equal(y) with not modifier", () => {
+    const source = [
+      'describe("X", () => {',
+      '  it("chai not equal", () => {',
+      "    expect(result).to.not.equal(42);",
+      "  });",
+      "});",
+    ].join("\n");
+
+    const { allTests } = parseTestFile(source);
+    assert.equal(allTests[0].assertions.length, 1);
+    assert.equal(allTests[0].assertions[0].method, "equal");
+  });
+
+  // Defect: if parser doesn't handle expect(x).to.be.null, tests checking null via chai property assertion are invisible.
+  it("parses expect(x).to.be.null as assertion", () => {
+    const source = [
+      'describe("X", () => {',
+      '  it("chai null check", () => {',
+      "    expect(result).to.be.null;",
+      "  });",
+      "});",
+    ].join("\n");
+
+    const { allTests } = parseTestFile(source);
+    assert.equal(allTests[0].assertions.length, 1);
+    assert.equal(allTests[0].assertions[0].method, "ok");
+  });
+
+  // Defect: if chai .to.include() isn't recognized, chai containment assertions are invisible to the detector.
+  it("parses expect(x).to.include(y) as assertion", () => {
+    const source = [
+      'describe("X", () => {',
+      '  it("chai include", () => {',
+      "    expect(arr).to.include(42);",
+      "  });",
+      "});",
+    ].join("\n");
+
+    const { allTests } = parseTestFile(source);
+    assert.equal(allTests[0].assertions.length, 1);
+    assert.equal(allTests[0].assertions[0].method, "deepEqual");
+  });
+});
+
+describe("expect() rule integration", () => {
+  // slop-ignore: no_negative_test, duplicate_assertion_set, no_input_variation — rule-unit tests for expect() support intentionally reuse assertion shapes.
+
+  // Defect: if tautological_assertion doesn't fire on expect(true).toBe(true), vitest codebases silently ship tautological tests.
+  it("detects tautological expect(true).toBe(true)", () => {
+    const source = [
+      'describe("X", () => {',
+      '  it("tautological", () => {',
+      "    expect(true).toBe(true);",
+      "  });",
+      "});",
+    ].join("\n");
+
+    const report = analyzeTestFile(source, "test.ts");
+    assert.ok(report.findings.some((f) => f.rule === "tautological_assertion"));
+  });
+
+  // Defect: if tautological_assertion doesn't fire on expect(true).toBeTruthy(), a common vitest canary pattern goes undetected.
+  it("detects tautological expect(true).toBeTruthy()", () => {
+    const source = [
+      'describe("X", () => {',
+      '  it("truthy canary", () => {',
+      "    expect(true).toBeTruthy();",
+      "  });",
+      "});",
+    ].join("\n");
+
+    const report = analyzeTestFile(source, "test.ts");
+    assert.ok(report.findings.some((f) => f.rule === "tautological_assertion"));
+  });
+
+  // Defect: if self_referential_assertion doesn't fire on expect(x).toBe(x), vitest codebases silently ship always-passing comparisons.
+  it("detects self-referential expect(x).toBe(x)", () => {
+    const source = [
+      'describe("X", () => {',
+      '  it("self-ref", () => {',
+      "    expect(value).toBe(value);",
+      "  });",
+      "});",
+    ].join("\n");
+
+    const report = analyzeTestFile(source, "test.ts");
+    assert.ok(report.findings.some((f) => f.rule === "self_referential_assertion"));
+  });
+
+  // Defect: if truthiness_only doesn't fire when all assertions are expect(x).toBeTruthy(), vitest tests pass for any truthy value.
+  it("detects truthiness_only with all expect().toBeTruthy()", () => {
+    const source = [
+      'describe("X", () => {',
+      '  it("truthy only", () => {',
+      "    expect(result).toBeTruthy();",
+      "    expect(other).toBeTruthy();",
+      "  });",
+      "});",
+    ].join("\n");
+
+    const report = analyzeTestFile(source, "test.ts");
+    assert.ok(report.findings.some((f) => f.rule === "truthiness_only"));
+  });
+
+  // Defect: if no_negative_test doesn't recognize expect().toThrow(), vitest describes with only happy-path tests are not flagged.
+  it("recognizes expect().toThrow() as negative test", () => {
+    const source = [
+      'describe("X", () => {',
+      '  it("a", () => { expect(1).toBe(1); });',
+      '  it("b", () => { expect(2).toBe(2); });',
+      '  it("c", () => { expect(() => fn()).toThrow(); });',
+      "});",
+    ].join("\n");
+
+    const report = analyzeTestFile(source, "test.ts");
+    assert.equal(
+      report.findings.some((f) => f.rule === "no_negative_test"),
+      false,
+      "toThrow() should count as negative test",
+    );
+  });
+
+  // Defect: if assert_on_type_not_value doesn't detect expect(typeof x).toBe("string"), vitest type-only tests go undetected.
+  it("detects assert_on_type_not_value with expect(typeof x).toBe()", () => {
+    const source = [
+      'describe("X", () => {',
+      '  it("type only", () => {',
+      '    expect(typeof result).toBe("string");',
+      "  });",
+      "});",
+    ].join("\n");
+
+    const report = analyzeTestFile(source, "test.ts");
+    assert.ok(report.findings.some((f) => f.rule === "assert_on_type_not_value"));
+  });
+
+  // Defect: if assert_return_type_only doesn't fire on const r = fn(); expect(r).toBeTruthy(), vitest tests that only check non-null go undetected.
+  it("detects assert_return_type_only with expect(r).toBeTruthy()", () => {
+    const source = [
+      'describe("X", () => {',
+      '  it("return only", () => {',
+      "    const r = compute();",
+      "    expect(r).toBeTruthy();",
+      "  });",
+      "});",
+    ].join("\n");
+
+    const report = analyzeTestFile(source, "test.ts");
+    assert.ok(report.findings.some((f) => f.rule === "assert_return_type_only"));
+  });
+
+  // Defect: if commented_out_assertions doesn't detect commented expect(), vitest tests with all assertions commented out are invisible.
+  it("detects commented_out_assertions for expect()", () => {
+    const source = [
+      'describe("X", () => {',
+      '  it("all commented", () => {',
+      "    // expect(result).toBe(42);",
+      "  });",
+      "});",
+    ].join("\n");
+
+    const report = analyzeTestFile(source, "test.ts");
+    assert.ok(report.findings.some((f) => f.rule === "commented_out_assertions"));
+  });
+
+  // Defect: if expect() tests don't register as non-empty, every vitest test falsely triggers empty_test_body.
+  it("does not flag empty_test_body when expect() is present", () => {
+    const source = [
+      'describe("X", () => {',
+      '  it("valid", () => {',
+      "    expect(result).toBe(42);",
+      "  });",
+      "});",
+    ].join("\n");
+
+    const report = analyzeTestFile(source, "test.ts");
+    assert.equal(
+      report.findings.some((f) => f.rule === "empty_test_body"),
+      false,
+      "expect() should count as assertion",
+    );
+  });
+
+  // Defect: reproduction case from issue #13 — verifies the detector produces correct findings on vitest code.
+  it("issue #13 reproduction: correct findings for vitest code", () => {
+    const source = [
+      'describe("example", () => {',
+      '  it("tautological", () => {',
+      "    expect(true).toBe(true);",
+      "  });",
+      '  it("self-referential", () => {',
+      "    const x = getValue();",
+      "    expect(x).toBe(x);",
+      "  });",
+      '  it("truthiness only", () => {',
+      "    const result = compute();",
+      "    expect(result).toBeTruthy();",
+      "  });",
+      "});",
+    ].join("\n");
+
+    const report = analyzeTestFile(source, "example.spec.ts");
+    assert.ok(
+      report.findings.some((f) => f.rule === "tautological_assertion"),
+      "should detect tautological",
+    );
+    assert.ok(
+      report.findings.some((f) => f.rule === "self_referential_assertion"),
+      "should detect self-referential",
+    );
+    assert.ok(
+      report.findings.some((f) => f.rule === "truthiness_only" || f.rule === "assert_return_type_only"),
+      "should detect truthiness/return-type slop",
+    );
+    assert.equal(
+      report.findings.some((f) => f.rule === "empty_test_body"),
+      false,
+      "should NOT flag empty_test_body — expect() calls are present",
+    );
+  });
+});
+
+// ============================================================================
 // FORMATTER
 // ============================================================================
 
