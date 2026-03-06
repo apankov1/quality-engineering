@@ -1,0 +1,1137 @@
+/**
+ * Slop Test Detector
+ *
+ * Static analyzer for test quality. Detects 12 slop patterns in test code
+ * that compile and pass but catch zero bugs.
+ *
+ * Zero dependencies — uses only Node.js built-ins.
+ *
+ * Consumers:
+ * - Agents: analyzeTestFile() or validateTestBlock() during generation
+ * - Humans: formatReport(analyzeTestFile(source)) for CLI audit
+ */
+
+// ============================================================================
+// TYPES
+// ============================================================================
+
+export type Severity = "must-fail" | "should-fail";
+
+export type SlopRule =
+  | "empty_test_body"
+  | "commented_out_assertions"
+  | "tautological_assertion"
+  | "self_referential_assertion"
+  | "missing_defect_comment"
+  | "trivial_defect_comment"
+  | "assert_on_type_not_value"
+  | "truthiness_only"
+  | "no_negative_test"
+  | "duplicate_assertion_set"
+  | "assert_return_type_only"
+  | "no_input_variation";
+
+export interface ParsedAssertion {
+  lineNumber: number;
+  raw: string;
+  method: string;
+  args: string;
+  isCommented: boolean;
+}
+
+export interface ParsedTestBlock {
+  name: string;
+  startLine: number;
+  endLine: number;
+  assertions: ParsedAssertion[];
+  assertionEquivCount: number;
+  precedingLines: string[];
+  bodyLines: string[];
+  parentDescribeName: string | null;
+}
+
+export interface ParsedDescribeBlock {
+  name: string;
+  startLine: number;
+  endLine: number;
+  tests: ParsedTestBlock[];
+  nestedDescribes: ParsedDescribeBlock[];
+}
+
+export interface SlopFinding {
+  rule: SlopRule;
+  severity: Severity;
+  testName: string;
+  describeName: string | null;
+  line: number;
+  message: string;
+  suggestion: string;
+}
+
+export interface SlopReport {
+  filePath: string;
+  findings: SlopFinding[];
+  score: number;
+  summary: { total: number; mustFail: number; shouldFail: number; testCount: number };
+}
+
+export interface SlopConfig {
+  enabledRules: Set<SlopRule>;
+  assertionEquivalents: string[];
+  scoreThreshold: number;
+}
+
+export interface SlopSuppression {
+  rule: SlopRule;
+  reason: string;
+  line: number;
+}
+
+// ============================================================================
+// CONSTANTS
+// ============================================================================
+
+const ALL_RULES: SlopRule[] = [
+  "empty_test_body",
+  "commented_out_assertions",
+  "tautological_assertion",
+  "self_referential_assertion",
+  "missing_defect_comment",
+  "trivial_defect_comment",
+  "assert_on_type_not_value",
+  "truthiness_only",
+  "no_negative_test",
+  "duplicate_assertion_set",
+  "assert_return_type_only",
+  "no_input_variation",
+];
+
+const OPINIONATED_RULES: SlopRule[] = ["missing_defect_comment", "trivial_defect_comment"];
+
+const RULE_SEVERITY: Record<SlopRule, Severity> = {
+  empty_test_body: "must-fail",
+  commented_out_assertions: "must-fail",
+  tautological_assertion: "must-fail",
+  self_referential_assertion: "must-fail",
+  missing_defect_comment: "should-fail",
+  trivial_defect_comment: "should-fail",
+  assert_on_type_not_value: "should-fail",
+  truthiness_only: "should-fail",
+  no_negative_test: "should-fail",
+  duplicate_assertion_set: "should-fail",
+  assert_return_type_only: "should-fail",
+  no_input_variation: "should-fail",
+};
+
+// Presets: strict = all 12, balanced = no defect-comment rules, advisory = all as should-fail
+export function getPreset(name: "strict" | "balanced" | "advisory"): SlopConfig {
+  switch (name) {
+    case "strict":
+      return { enabledRules: new Set(ALL_RULES), assertionEquivalents: [], scoreThreshold: 90 };
+    case "balanced":
+      return {
+        enabledRules: new Set(ALL_RULES.filter((r) => !OPINIONATED_RULES.includes(r))),
+        assertionEquivalents: [],
+        scoreThreshold: 80,
+      };
+    case "advisory":
+      return { enabledRules: new Set(ALL_RULES), assertionEquivalents: [], scoreThreshold: 0 };
+  }
+}
+
+const DEFAULT_CONFIG: SlopConfig = getPreset("balanced");
+
+const SLOP_IGNORE_RE = /\/\/\s*slop-ignore:\s*([\w,\s]+?)\s*—\s*(.+?)\s*$/;
+const ASSERT_METHODS = [
+  "equal",
+  "ok",
+  "throws",
+  "deepEqual",
+  "rejects",
+  "doesNotReject",
+  "doesNotThrow",
+  "fail",
+  "notEqual",
+  "deepStrictEqual",
+  "strictEqual",
+  "match",
+  "doesNotMatch",
+  "ifError",
+  "notDeepEqual",
+  "notDeepStrictEqual",
+  "notStrictEqual",
+] as const;
+const ASSERT_METHOD_SET = new Set<string>(ASSERT_METHODS);
+const ASSERT_MODULE_RE = new RegExp(`assert\\.(${ASSERT_METHODS.join("|")})\\s*\\(`);
+
+// ============================================================================
+// PARSER UTILITIES
+// ============================================================================
+
+const REGEX_PREFIX_CHARS = new Set("(,=!|&?:;[{~^%<>+-*");
+
+function isRegexStart(text: string, slashPos: number): boolean {
+  let j = slashPos - 1;
+  while (j >= 0 && (text[j] === " " || text[j] === "\t")) j--;
+  if (j < 0) return true;
+  return REGEX_PREFIX_CHARS.has(text[j]);
+}
+
+type LexState = "code" | "single" | "double" | "backtick" | "regex" | "block-comment";
+
+// "stop" return halts iteration immediately.
+type CodeCharAction = "stop" | undefined;
+
+interface ScanOptions {
+  text: string;
+  start?: number;
+  initialState?: LexState;
+  onCode: (ch: string, i: number) => CodeCharAction;
+  onLineComment?: (i: number) => CodeCharAction;
+  onBlockCommentToggle?: (entering: boolean) => void;
+}
+
+function scanCode(opts: ScanOptions): LexState {
+  const { text, start = 0, onCode, onLineComment, onBlockCommentToggle } = opts;
+  let state: LexState = opts.initialState ?? "code";
+
+  for (let i = start; i < text.length; i++) {
+    const ch = text[i];
+
+    // Backslash escape inside strings
+    if (state !== "code" && state !== "block-comment" && state !== "regex" && ch === "\\") {
+      i++;
+      continue;
+    }
+
+    switch (state) {
+      case "code":
+        if (ch === "'") state = "single";
+        else if (ch === '"') state = "double";
+        else if (ch === "`") state = "backtick";
+        else if (ch === "/" && text[i + 1] === "*") {
+          state = "block-comment";
+          onBlockCommentToggle?.(true);
+          i++;
+        } else if (ch === "/" && text[i + 1] === "/") {
+          if (onLineComment?.(i) === "stop") return state;
+          return state; // line comments end the line for code purposes
+        } else if (ch === "/" && isRegexStart(text, i)) {
+          state = "regex";
+        } else if (onCode(ch, i) === "stop") {
+          return state;
+        }
+        break;
+      case "regex":
+        if (ch === "\\") {
+          i++;
+        } else if (ch === "[") {
+          for (i++; i < text.length; i++) {
+            if (text[i] === "\\" && i + 1 < text.length) i++;
+            else if (text[i] === "]") break;
+          }
+        } else if (ch === "/") {
+          state = "code";
+        }
+        break;
+      case "block-comment":
+        if (ch === "*" && text[i + 1] === "/") {
+          state = "code";
+          onBlockCommentToggle?.(false);
+          i++;
+        }
+        break;
+      case "single":
+        if (ch === "'") state = "code";
+        break;
+      case "double":
+        if (ch === '"') state = "code";
+        break;
+      case "backtick":
+        if (ch === "`") state = "code";
+        break;
+    }
+  }
+  return state;
+}
+
+function computeBraceDelta(line: string, startsInBlockComment = false): { delta: number; endsInBlockComment: boolean } {
+  let delta = 0;
+  const endState = scanCode({
+    text: line,
+    initialState: startsInBlockComment ? "block-comment" : "code",
+    onCode(ch) {
+      if (ch === "{") delta++;
+      else if (ch === "}") delta--;
+    },
+  });
+  return { delta, endsInBlockComment: endState === "block-comment" };
+}
+
+function extractArgsFromLine(line: string, startIndex: number): { args: string; complete: boolean } {
+  let depth = 1;
+  let endPos = -1;
+  scanCode({
+    text: line,
+    start: startIndex,
+    onCode(ch, i) {
+      if (ch === "(") depth++;
+      else if (ch === ")") {
+        depth--;
+        if (depth === 0) {
+          endPos = i;
+          return "stop";
+        }
+      }
+    },
+  });
+  if (endPos >= 0) return { args: line.slice(startIndex, endPos), complete: true };
+  return { args: line.slice(startIndex).replace(/,?\s*$/, ""), complete: false };
+}
+
+export function splitAssertArgs(args: string): string[] {
+  const parts: string[] = [];
+  let current = "";
+  let depth = 0;
+  // Manual scan — we need to accumulate characters including those inside strings/regex
+  let state: "code" | "single" | "double" | "backtick" | "regex" = "code";
+  for (let i = 0; i < args.length; i++) {
+    const ch = args[i];
+    if (state !== "code" && state !== "regex" && ch === "\\") {
+      current += ch + (args[i + 1] ?? "");
+      i++;
+      continue;
+    }
+    switch (state) {
+      case "code":
+        if (ch === "'") {
+          state = "single";
+          current += ch;
+        } else if (ch === '"') {
+          state = "double";
+          current += ch;
+        } else if (ch === "`") {
+          state = "backtick";
+          current += ch;
+        } else if (ch === "/" && isRegexStart(args, i)) {
+          state = "regex";
+          current += ch;
+        } else if (ch === "(" || ch === "[" || ch === "{") {
+          depth++;
+          current += ch;
+        } else if (ch === ")" || ch === "]" || ch === "}") {
+          depth--;
+          current += ch;
+        } else if (ch === "," && depth === 0) {
+          parts.push(current.trim());
+          current = "";
+        } else {
+          current += ch;
+        }
+        break;
+      case "regex":
+        current += ch;
+        if (ch === "\\") {
+          current += args[i + 1] ?? "";
+          i++;
+        } else if (ch === "[") {
+          for (i++; i < args.length; i++) {
+            current += args[i];
+            if (args[i] === "\\" && i + 1 < args.length) {
+              i++;
+              current += args[i];
+            } else if (args[i] === "]") break;
+          }
+        } else if (ch === "/") {
+          state = "code";
+        }
+        break;
+      case "single":
+        current += ch;
+        if (ch === "'") state = "code";
+        break;
+      case "double":
+        current += ch;
+        if (ch === '"') state = "code";
+        break;
+      case "backtick":
+        current += ch;
+        if (ch === "`") state = "code";
+        break;
+      default:
+        break;
+    }
+  }
+  if (current.trim()) parts.push(current.trim());
+  return parts;
+}
+
+export function isLiteral(s: string): boolean {
+  return /^(true|false|null|undefined|-?\d+(\.\d+)?|"[^"]*"|'[^']*')$/.test(s);
+}
+
+function stripTrailingLineComment(line: string): string {
+  let commentStart = -1;
+  scanCode({
+    text: line,
+    onCode() {},
+    onLineComment(i) {
+      commentStart = i;
+      return "stop";
+    },
+  });
+  return commentStart >= 0 ? line.slice(0, commentStart).trimEnd() : line;
+}
+
+function findAssertCallInCode(line: string): { method: string; argsStart: number } | null {
+  let found: { method: string; argsStart: number } | null = null;
+  const identChar = /[A-Za-z0-9_$]/;
+
+  scanCode({
+    text: line,
+    onCode(_ch, i) {
+      if (!line.startsWith("assert.", i)) return;
+
+      const prev = i > 0 ? line[i - 1] : "";
+      if (prev && identChar.test(prev)) return;
+
+      let j = i + "assert.".length;
+      while (j < line.length && /[A-Za-z]/.test(line[j])) j++;
+      const method = line.slice(i + "assert.".length, j);
+      if (!ASSERT_METHOD_SET.has(method)) return;
+
+      while (line[j] === " " || line[j] === "\t") j++;
+      if (line[j] !== "(") return;
+
+      found = { method, argsStart: j + 1 };
+      return "stop";
+    },
+    onLineComment() {
+      return "stop";
+    },
+  });
+
+  return found;
+}
+
+function extractAssertions(bodyLines: string[], baseLineNumber: number): ParsedAssertion[] {
+  const results: ParsedAssertion[] = [];
+
+  for (let i = 0; i < bodyLines.length; i++) {
+    const raw = bodyLines[i];
+    const trimmed = raw.trimStart();
+    const isCommented = trimmed.startsWith("//");
+    const testLine = isCommented ? trimmed.slice(2).trimStart() : trimmed;
+
+    let method = "";
+    let argsStart = -1;
+
+    if (isCommented) {
+      const match = ASSERT_MODULE_RE.exec(testLine);
+      if (!match) continue;
+      method = match[1];
+      argsStart = match.index + match[0].length;
+    } else {
+      const call = findAssertCallInCode(testLine);
+      if (!call) continue;
+      method = call.method;
+      argsStart = call.argsStart;
+    }
+
+    let { args, complete } = extractArgsFromLine(testLine, argsStart);
+
+    if (!complete) {
+      let combined = stripTrailingLineComment(testLine);
+      for (let j = i + 1; j < bodyLines.length; j++) {
+        const nextTrimmed = bodyLines[j].trimStart();
+        const nextLine = isCommented && nextTrimmed.startsWith("//") ? nextTrimmed.slice(2).trimStart() : nextTrimmed;
+        combined += ` ${stripTrailingLineComment(nextLine)}`;
+        const result = extractArgsFromLine(combined, argsStart);
+        args = result.args;
+        if (result.complete) break;
+      }
+    }
+
+    results.push({ lineNumber: baseLineNumber + i, raw: trimmed, method, args, isCommented });
+  }
+
+  return results;
+}
+
+function countAssertionEquivs(bodyLines: string[], allowlist: string[]): number {
+  if (allowlist.length === 0) return 0;
+
+  function hasAllowlistedCall(line: string): boolean {
+    let found = false;
+    const identChar = /[A-Za-z0-9_$]/;
+
+    scanCode({
+      text: line,
+      onCode(_ch, i) {
+        for (const name of allowlist) {
+          if (!line.startsWith(name, i)) continue;
+          const prev = i > 0 ? line[i - 1] : "";
+          if (prev && identChar.test(prev)) continue;
+
+          let j = i + name.length;
+          while (line[j] === " " || line[j] === "\t") j++;
+          if (line[j] !== "(") continue;
+
+          found = true;
+          return "stop";
+        }
+      },
+      onLineComment() {
+        return "stop";
+      },
+    });
+
+    return found;
+  }
+
+  let count = 0;
+  for (const line of bodyLines) {
+    const trimmed = line.trimStart();
+    if (trimmed.startsWith("//")) continue;
+    if (ASSERT_MODULE_RE.test(trimmed)) continue;
+    if (hasAllowlistedCall(line)) count++;
+  }
+  return count;
+}
+
+// ============================================================================
+// PARSER
+// ============================================================================
+
+interface StackEntry {
+  type: "describe" | "it";
+  name: string;
+  startLine: number;
+  braceDepthAtOpen: number;
+  precedingLines: string[];
+  childTests: ParsedTestBlock[];
+  childDescribes: ParsedDescribeBlock[];
+}
+
+export function parseTestFile(
+  source: string,
+  assertionEquivalents: string[] = [],
+): { describes: ParsedDescribeBlock[]; allTests: ParsedTestBlock[] } {
+  const lines = source.split("\n");
+  const allTests: ParsedTestBlock[] = [];
+  const topLevelDescribes: ParsedDescribeBlock[] = [];
+
+  const stack: StackEntry[] = [];
+  let braceDepth = 0;
+  let inBlockComment = false;
+
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i];
+    const trimmed = line.trimStart();
+
+    const { delta, endsInBlockComment } = computeBraceDelta(line, inBlockComment);
+    const wasInBlockComment = inBlockComment;
+    inBlockComment = endsInBlockComment;
+
+    const descMatch = wasInBlockComment ? null : trimmed.match(/^describe(?:\.(?:only|skip))?\(\s*["'`]([^"'`]+)["'`]/);
+    const itMatch =
+      wasInBlockComment || descMatch ? null : trimmed.match(/^(?:it|test)(?:\.(?:only|skip))?\(\s*["'`]([^"'`]+)["'`]/);
+
+    const prevDepth = braceDepth;
+    braceDepth += delta;
+
+    if (descMatch) {
+      stack.push({
+        type: "describe",
+        name: descMatch[1],
+        startLine: i + 1,
+        braceDepthAtOpen: prevDepth + 1,
+        precedingLines: [],
+        childTests: [],
+        childDescribes: [],
+      });
+    } else if (itMatch) {
+      stack.push({
+        type: "it",
+        name: itMatch[1],
+        startLine: i + 1,
+        braceDepthAtOpen: prevDepth + 1,
+        precedingLines: lines.slice(Math.max(0, i - 3), i),
+        childTests: [],
+        childDescribes: [],
+      });
+    }
+
+    while (stack.length > 0 && braceDepth < stack[stack.length - 1].braceDepthAtOpen) {
+      const entry = stack.pop();
+      if (!entry) break;
+      const endLine = i + 1;
+
+      if (entry.type === "it") {
+        const bodyLines = lines.slice(entry.startLine - 1, endLine);
+        const assertions = extractAssertions(bodyLines, entry.startLine);
+        const assertionEquivCount = countAssertionEquivs(bodyLines, assertionEquivalents);
+
+        const parentDesc = stack.findLast((e) => e.type === "describe");
+        const test: ParsedTestBlock = {
+          name: entry.name,
+          startLine: entry.startLine,
+          endLine,
+          assertions,
+          assertionEquivCount,
+          precedingLines: entry.precedingLines,
+          bodyLines,
+          parentDescribeName: parentDesc?.name ?? null,
+        };
+
+        allTests.push(test);
+        if (parentDesc) parentDesc.childTests.push(test);
+      }
+
+      if (entry.type === "describe") {
+        const desc: ParsedDescribeBlock = {
+          name: entry.name,
+          startLine: entry.startLine,
+          endLine,
+          tests: entry.childTests,
+          nestedDescribes: entry.childDescribes,
+        };
+
+        const parentDesc = stack.findLast((e) => e.type === "describe");
+        if (parentDesc) {
+          parentDesc.childDescribes.push(desc);
+        } else {
+          topLevelDescribes.push(desc);
+        }
+      }
+    }
+  }
+
+  return { describes: topLevelDescribes, allTests };
+}
+
+// ============================================================================
+// HELPERS
+// ============================================================================
+
+function makeFinding(
+  rule: SlopRule,
+  block: { name: string; parentDescribeName: string | null },
+  line: number,
+  message: string,
+  suggestion: string,
+): SlopFinding {
+  return {
+    rule,
+    severity: RULE_SEVERITY[rule],
+    testName: block.name,
+    describeName: block.parentDescribeName,
+    line,
+    message,
+    suggestion,
+  };
+}
+
+function activeAssertions(block: ParsedTestBlock): ParsedAssertion[] {
+  return block.assertions.filter((a) => !a.isCommented);
+}
+
+// ============================================================================
+// RULE CHECKERS: MUST-FAIL
+// ============================================================================
+
+export function checkEmptyTestBody(block: ParsedTestBlock): SlopFinding | null {
+  const active = activeAssertions(block);
+  if (active.length === 0 && block.assertionEquivCount === 0) {
+    return makeFinding(
+      "empty_test_body",
+      block,
+      block.startLine,
+      "Test body contains zero assertions — passes regardless of behavior",
+      "Add at least one assert.* call or assertion-equivalent helper",
+    );
+  }
+  return null;
+}
+
+export function checkCommentedOutAssertions(block: ParsedTestBlock): SlopFinding | null {
+  const active = activeAssertions(block);
+  const commented = block.assertions.filter((a) => a.isCommented);
+  if (active.length === 0 && commented.length > 0 && block.assertionEquivCount === 0) {
+    return makeFinding(
+      "commented_out_assertions",
+      block,
+      commented[0].lineNumber,
+      `All ${commented.length} assertion(s) are commented out — test is inert`,
+      "Uncomment assertions or delete the test",
+    );
+  }
+  return null;
+}
+
+export function checkTautologicalAssertion(block: ParsedTestBlock): SlopFinding[] {
+  const findings: SlopFinding[] = [];
+
+  for (const a of activeAssertions(block)) {
+    if (a.method === "ok") {
+      const arg = a.args.trim();
+      if (/^(true|1)$/.test(arg)) {
+        findings.push(
+          makeFinding(
+            "tautological_assertion",
+            block,
+            a.lineNumber,
+            `assert.ok(${arg}) always passes — does not verify behavior`,
+            "Replace with assertion on actual computed value",
+          ),
+        );
+      }
+    }
+
+    if (a.method === "equal" || a.method === "strictEqual") {
+      const parts = splitAssertArgs(a.args);
+      if (parts.length >= 2 && parts[0] === parts[1] && isLiteral(parts[0])) {
+        findings.push(
+          makeFinding(
+            "tautological_assertion",
+            block,
+            a.lineNumber,
+            `assert.${a.method}(${parts[0]}, ${parts[1]}) compares identical literals — always passes`,
+            "Replace with assertion comparing computed value to expected literal",
+          ),
+        );
+      }
+    }
+  }
+
+  return findings;
+}
+
+export function checkSelfReferentialAssertion(block: ParsedTestBlock): SlopFinding[] {
+  const findings: SlopFinding[] = [];
+  const methods = new Set(["equal", "deepEqual", "strictEqual", "deepStrictEqual"]);
+
+  for (const a of activeAssertions(block)) {
+    if (!methods.has(a.method)) continue;
+    const parts = splitAssertArgs(a.args);
+    if (parts.length >= 2 && parts[0] === parts[1] && parts[0].length > 0 && !isLiteral(parts[0])) {
+      findings.push(
+        makeFinding(
+          "self_referential_assertion",
+          block,
+          a.lineNumber,
+          `assert.${a.method}(${parts[0]}, ${parts[0]}) compares value to itself — always passes`,
+          "Compare against an expected value, not the same expression",
+        ),
+      );
+    }
+  }
+
+  return findings;
+}
+
+// ============================================================================
+// RULE CHECKERS: SHOULD-FAIL (BLOCK-LEVEL)
+// ============================================================================
+
+export function checkMissingDefectComment(block: ParsedTestBlock): SlopFinding | null {
+  const hasDefect = block.precedingLines.some((line) => /\/\/\s*Defect:/i.test(line));
+  if (!hasDefect) {
+    return makeFinding(
+      "missing_defect_comment",
+      block,
+      block.startLine,
+      "No // Defect: comment explaining what bug this test catches",
+      "Add a comment like: // Defect: if X is broken, then Y fails in production",
+    );
+  }
+  return null;
+}
+
+export function checkTrivialDefectComment(block: ParsedTestBlock): SlopFinding | null {
+  for (const line of block.precedingLines) {
+    const match = line.match(/\/\/\s*Defect:\s*(.*)/i);
+    if (match) {
+      const text = match[1].trim();
+      const words = text.split(/\s+/).filter((w) => w.length > 0);
+      if (words.length < 10) {
+        return makeFinding(
+          "trivial_defect_comment",
+          block,
+          block.startLine,
+          `Defect comment has ${words.length} words (minimum 10) — too brief to explain production impact`,
+          "Expand: what breaks, for whom, and what the consequence is",
+        );
+      }
+      return null;
+    }
+  }
+  return null;
+}
+
+export function checkAssertOnTypeNotValue(block: ParsedTestBlock): SlopFinding | null {
+  const active = activeAssertions(block);
+  if (active.length === 0) return null;
+
+  const allTypeChecks = active.every((a) => a.method === "equal" && /typeof\s+\w+/.test(a.args));
+  if (allTypeChecks) {
+    return makeFinding(
+      "assert_on_type_not_value",
+      block,
+      block.startLine,
+      "All assertions check typeof — verifies shape but not behavior",
+      "Add at least one assertion on a computed value",
+    );
+  }
+  return null;
+}
+
+export function checkTruthinessOnly(block: ParsedTestBlock): SlopFinding | null {
+  const active = activeAssertions(block);
+  if (active.length === 0 || block.assertionEquivCount > 0) return null;
+
+  const allTruthiness = active.every((a) => a.method === "ok" && /^[a-zA-Z_$][a-zA-Z0-9_$.]*$/.test(a.args.trim()));
+  if (allTruthiness) {
+    return makeFinding(
+      "truthiness_only",
+      block,
+      block.startLine,
+      "All assertions are assert.ok(identifier) — checks existence but not correctness",
+      "Add assert.equal or assert.deepEqual to verify specific values",
+    );
+  }
+  return null;
+}
+
+export function checkAssertReturnTypeOnly(block: ParsedTestBlock): SlopFinding | null {
+  const active = activeAssertions(block);
+  if (active.length !== 1 || block.assertionEquivCount > 0) return null;
+
+  const a = active[0];
+  if (a.method !== "ok") return null;
+
+  const argIdent = a.args.trim();
+  if (!/^[a-zA-Z_$][a-zA-Z0-9_$.]*$/.test(argIdent)) return null;
+
+  const hasAssignment = block.bodyLines.some((line) => {
+    const t = line.trimStart();
+    return new RegExp(`(?:const|let|var)\\s+${argIdent.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\s*=`).test(t);
+  });
+
+  if (hasAssignment) {
+    return makeFinding(
+      "assert_return_type_only",
+      block,
+      a.lineNumber,
+      `Only assertion is assert.ok(${argIdent}) on a return value — checks non-null but not correctness`,
+      "Assert on specific properties or values of the result",
+    );
+  }
+  return null;
+}
+
+// ============================================================================
+// RULE CHECKERS: SHOULD-FAIL (DESCRIBE-LEVEL)
+// ============================================================================
+
+function collectAllTests(describe: ParsedDescribeBlock): ParsedTestBlock[] {
+  const tests = [...describe.tests];
+  for (const nested of describe.nestedDescribes) {
+    tests.push(...collectAllTests(nested));
+  }
+  return tests;
+}
+
+export function checkNoNegativeTest(describe: ParsedDescribeBlock): SlopFinding | null {
+  const allTests = collectAllTests(describe);
+  if (allTests.length < 3) return null;
+
+  const hasNegative = allTests.some((t) =>
+    t.assertions.some((a) => !a.isCommented && (a.method === "throws" || a.method === "rejects")),
+  );
+
+  if (!hasNegative) {
+    return {
+      rule: "no_negative_test",
+      severity: "should-fail",
+      testName: "",
+      describeName: describe.name,
+      line: describe.startLine,
+      message: `describe("${describe.name}") has ${allTests.length} tests but zero assert.throws/rejects`,
+      suggestion: "Add at least one test for error/rejection paths",
+    };
+  }
+  return null;
+}
+
+export function checkDuplicateAssertionSet(describe: ParsedDescribeBlock): SlopFinding[] {
+  const findings: SlopFinding[] = [];
+
+  function normalizeSequence(test: ParsedTestBlock): string {
+    return activeAssertions(test)
+      .map((a) => {
+        const normArgs = a.args
+          .replace(/"[^"]*"/g, "STR")
+          .replace(/'[^']*'/g, "STR")
+          .replace(/`[^`]*`/g, "STR");
+        return `${a.method}(${normArgs})`;
+      })
+      .join("|");
+  }
+
+  const tests = describe.tests;
+  const seen = new Map<string, ParsedTestBlock>();
+
+  for (const test of tests) {
+    const active = activeAssertions(test);
+    if (active.length === 0) continue;
+
+    const seq = normalizeSequence(test);
+    const existing = seen.get(seq);
+    if (existing) {
+      findings.push({
+        rule: "duplicate_assertion_set",
+        severity: "should-fail",
+        testName: test.name,
+        describeName: describe.name,
+        line: test.startLine,
+        message: `Identical assertion sequence as "${existing.name}" (line ${existing.startLine})`,
+        suggestion: "Verify these tests check different behaviors — if so, differentiate assertions",
+      });
+    } else {
+      seen.set(seq, test);
+    }
+  }
+
+  return findings;
+}
+
+export function checkNoInputVariation(describe: ParsedDescribeBlock): SlopFinding[] {
+  const findings: SlopFinding[] = [];
+  const tests = describe.tests;
+  if (tests.length < 2) return findings;
+
+  function extractAssertedCalls(test: ParsedTestBlock): Map<string, string[]> {
+    const calls = new Map<string, string[]>();
+    for (const a of activeAssertions(test)) {
+      const parts = splitAssertArgs(a.args);
+      for (const part of parts) {
+        let text = part.trim();
+        if (text.startsWith("await ")) text = text.slice(6).trimStart();
+        const fnMatch = text.match(/^([a-zA-Z_$][\w.]*)\(/);
+        if (!fnMatch) continue;
+        const fnName = fnMatch[1];
+        const argsStart = fnMatch[0].length;
+        const { args } = extractArgsFromLine(text, argsStart);
+        const existing = calls.get(fnName) ?? [];
+        existing.push(args);
+        calls.set(fnName, existing);
+      }
+    }
+    return calls;
+  }
+
+  for (let i = 0; i < tests.length; i++) {
+    const calls1 = extractAssertedCalls(tests[i]);
+    for (let j = i + 1; j < tests.length; j++) {
+      const calls2 = extractAssertedCalls(tests[j]);
+      for (const [fn, argsList1] of calls1) {
+        const argsList2 = calls2.get(fn);
+        if (!argsList2) continue;
+        const matchedArg = argsList1.find((a1) => a1.length > 0 && argsList2.some((a2) => a1 === a2));
+        if (matchedArg !== undefined) {
+          findings.push({
+            rule: "no_input_variation",
+            severity: "should-fail",
+            testName: tests[j].name,
+            describeName: describe.name,
+            line: tests[j].startLine,
+            message: `Same args to ${fn}() as "${tests[i].name}" — no input variation`,
+            suggestion: "Use different inputs to test different behaviors",
+          });
+        }
+      }
+    }
+  }
+
+  return findings;
+}
+
+// ============================================================================
+// ORCHESTRATORS
+// ============================================================================
+
+function parseSuppressedRules(lines: string[]): Set<SlopRule> {
+  const suppressed = new Set<SlopRule>();
+  for (const line of lines) {
+    const match = SLOP_IGNORE_RE.exec(line);
+    if (!match) continue;
+    const rules = match[1]
+      .split(",")
+      .map((r) => r.trim())
+      .filter((r) => ALL_RULES.includes(r as SlopRule)) as SlopRule[];
+    for (const rule of rules) suppressed.add(rule);
+  }
+  return suppressed;
+}
+
+function runBlockRules(block: ParsedTestBlock, enabled: Set<SlopRule>): SlopFinding[] {
+  const findings: SlopFinding[] = [];
+  const blockRules: Array<[SlopRule, () => SlopFinding | SlopFinding[] | null]> = [
+    ["empty_test_body", () => checkEmptyTestBody(block)],
+    ["commented_out_assertions", () => checkCommentedOutAssertions(block)],
+    ["tautological_assertion", () => checkTautologicalAssertion(block)],
+    ["self_referential_assertion", () => checkSelfReferentialAssertion(block)],
+    ["missing_defect_comment", () => checkMissingDefectComment(block)],
+    ["trivial_defect_comment", () => checkTrivialDefectComment(block)],
+    ["assert_on_type_not_value", () => checkAssertOnTypeNotValue(block)],
+    ["truthiness_only", () => checkTruthinessOnly(block)],
+    ["assert_return_type_only", () => checkAssertReturnTypeOnly(block)],
+  ];
+  for (const [rule, check] of blockRules) {
+    if (!enabled.has(rule)) continue;
+    const result = check();
+    if (result === null) continue;
+    if (Array.isArray(result)) findings.push(...result);
+    else findings.push(result);
+  }
+  return findings;
+}
+
+function runDescribeRules(describe: ParsedDescribeBlock, enabled: Set<SlopRule>, sourceLines: string[]): SlopFinding[] {
+  const findings: SlopFinding[] = [];
+  const suppressed = parseSuppressedRules(sourceLines.slice(describe.startLine - 1, describe.endLine));
+
+  if (enabled.has("no_negative_test") && !suppressed.has("no_negative_test")) {
+    const noNeg = checkNoNegativeTest(describe);
+    if (noNeg) findings.push(noNeg);
+  }
+  if (enabled.has("duplicate_assertion_set") && !suppressed.has("duplicate_assertion_set")) {
+    findings.push(...checkDuplicateAssertionSet(describe));
+  }
+  if (enabled.has("no_input_variation") && !suppressed.has("no_input_variation")) {
+    findings.push(...checkNoInputVariation(describe));
+  }
+  for (const nested of describe.nestedDescribes) {
+    findings.push(...runDescribeRules(nested, enabled, sourceLines));
+  }
+  return findings;
+}
+
+function calculateScore(findings: SlopFinding[], testCount: number): number {
+  if (testCount === 0) return 100;
+  const mustFailCount = findings.filter((f) => f.severity === "must-fail").length;
+  const shouldFailCount = findings.filter((f) => f.severity === "should-fail").length;
+  const weighted = mustFailCount * 1.0 + shouldFailCount * 0.3;
+  const slopRatio = weighted / testCount;
+  return Math.max(0, Math.min(100, Math.round(100 * (1 - slopRatio))));
+}
+
+export function analyzeTestFile(
+  source: string,
+  filePath = "<unknown>",
+  config: SlopConfig = DEFAULT_CONFIG,
+): SlopReport {
+  const sourceLines = source.split("\n");
+  const { describes, allTests } = parseTestFile(source, config.assertionEquivalents);
+  const findings: SlopFinding[] = [];
+
+  for (const test of allTests) {
+    const suppressed = parseSuppressedRules([...test.precedingLines, ...test.bodyLines]);
+    const blockFindings = runBlockRules(test, config.enabledRules);
+    findings.push(...blockFindings.filter((f) => !suppressed.has(f.rule)));
+  }
+
+  for (const desc of describes) {
+    findings.push(...runDescribeRules(desc, config.enabledRules, sourceLines));
+  }
+
+  findings.sort((a, b) => a.line - b.line);
+
+  const mustFail = findings.filter((f) => f.severity === "must-fail").length;
+  const shouldFail = findings.filter((f) => f.severity === "should-fail").length;
+
+  return {
+    filePath,
+    findings,
+    score: calculateScore(findings, allTests.length),
+    summary: { total: findings.length, mustFail, shouldFail, testCount: allTests.length },
+  };
+}
+
+export function validateTestBlock(testSource: string, config: SlopConfig = DEFAULT_CONFIG): SlopFinding[] {
+  const wrapped = `describe("__validate__", () => {\n${testSource}\n});`;
+  const { allTests } = parseTestFile(wrapped, config.assertionEquivalents);
+  const findings: SlopFinding[] = [];
+  for (const test of allTests) {
+    findings.push(...runBlockRules(test, config.enabledRules));
+  }
+  return findings;
+}
+
+// ============================================================================
+// FORMATTER
+// ============================================================================
+
+export function formatReport(report: SlopReport): string {
+  const { filePath, findings, score, summary } = report;
+  const lines: string[] = [];
+
+  lines.push(`## Slop Report: ${filePath}`);
+  lines.push("");
+  lines.push(
+    `**Score: ${score}/100** | ${summary.testCount} tests | ${summary.mustFail} must-fail | ${summary.shouldFail} should-fail`,
+  );
+
+  if (findings.length === 0) {
+    lines.push("");
+    lines.push("No slop detected.");
+    return lines.join("\n");
+  }
+
+  const mustFails = findings.filter((f) => f.severity === "must-fail");
+  const shouldFails = findings.filter((f) => f.severity === "should-fail");
+
+  if (mustFails.length > 0) {
+    lines.push("");
+    lines.push(`### MUST-FAIL (${mustFails.length})`);
+    for (const f of mustFails) {
+      lines.push("");
+      lines.push(`- **${f.rule}** (line ${f.line}): ${f.message}`);
+      lines.push(`  Fix: ${f.suggestion}`);
+    }
+  }
+
+  if (shouldFails.length > 0) {
+    lines.push("");
+    lines.push(`### SHOULD-FAIL (${shouldFails.length})`);
+    for (const f of shouldFails) {
+      lines.push("");
+      lines.push(`- **${f.rule}** (line ${f.line}): ${f.message}`);
+      lines.push(`  Fix: ${f.suggestion}`);
+    }
+  }
+
+  return lines.join("\n");
+}
+
+export function formatReportJSON(report: SlopReport): string {
+  return JSON.stringify(
+    {
+      filePath: report.filePath,
+      score: report.score,
+      summary: report.summary,
+      findings: report.findings.map((f) => ({
+        rule: f.rule,
+        severity: f.severity,
+        line: f.line,
+        testName: f.testName,
+        describeName: f.describeName,
+        message: f.message,
+        suggestion: f.suggestion,
+      })),
+    },
+    null,
+    2,
+  );
+}

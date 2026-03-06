@@ -1,0 +1,280 @@
+# Slop Patterns Reference
+
+All 12 slop patterns with before (slop) and after (fixed) examples.
+
+---
+
+## Must-Fail Patterns
+
+### 1. empty_test_body
+
+**Before (slop)**:
+```typescript
+it("handles edge case", () => {
+  const result = processData(input);
+  // TODO: add assertions
+});
+```
+
+**After (fixed)**:
+```typescript
+it("handles edge case", () => {
+  const result = processData(input);
+  assert.equal(result.status, "success");
+  assert.equal(result.items.length, 3);
+});
+```
+
+**Note**: Tests using assertion-equivalent helpers like `assertLogEntry()` or `testValidInput()` are NOT flagged — the detector recognizes `assert[A-Z]*()` and `test[A-Z]*()` patterns as assertion equivalents.
+
+---
+
+### 2. commented_out_assertions
+
+**Before (slop)**:
+```typescript
+it("validates input", () => {
+  const result = validate(data);
+  // assert.equal(result.valid, true);
+  // assert.equal(result.errors.length, 0);
+});
+```
+
+**After (fixed)**:
+```typescript
+it("validates input", () => {
+  const result = validate(data);
+  assert.equal(result.valid, true);
+  assert.equal(result.errors.length, 0);
+});
+```
+
+---
+
+### 3. tautological_assertion
+
+**Before (slop)**:
+```typescript
+it("processes correctly", () => {
+  processData(input);
+  assert.ok(true);  // always passes
+  assert.equal(1, 1);  // always passes
+});
+```
+
+**After (fixed)**:
+```typescript
+it("processes correctly", () => {
+  const result = processData(input);
+  assert.equal(result.processed, true);
+  assert.equal(result.count, 5);
+});
+```
+
+---
+
+### 4. self_referential_assertion
+
+**Before (slop)**:
+```typescript
+it("returns correct value", () => {
+  const result = calculate(10);
+  assert.equal(result, result);  // always passes
+});
+```
+
+**After (fixed)**:
+```typescript
+it("returns correct value", () => {
+  const result = calculate(10);
+  assert.equal(result, 20);
+});
+```
+
+---
+
+## Should-Fail Patterns
+
+### 5. missing_defect_comment
+
+**Before (slop)**:
+```typescript
+it("opens after failure threshold", () => {
+  cb.recordFailure();
+  cb.recordFailure();
+  cb.recordFailure();
+  assert.equal(cb.getState(), "open");
+});
+```
+
+**After (fixed)**:
+```typescript
+// Defect: without circuit breaker, client hammers a down server indefinitely — cascading failures take down the entire service mesh.
+it("opens after failure threshold", () => {
+  cb.recordFailure();
+  cb.recordFailure();
+  cb.recordFailure();
+  assert.equal(cb.getState(), "open");
+});
+```
+
+---
+
+### 6. trivial_defect_comment
+
+**Before (slop)**:
+```typescript
+// Defect: Must work correctly
+it("validates input", () => { ... });
+```
+
+**After (fixed)**:
+```typescript
+// Defect: if validation accepts malformed input, corrupt records propagate to downstream systems and cause silent data loss in billing.
+it("validates input", () => { ... });
+```
+
+The minimum is 10 words — enough to explain what breaks, for whom, and the consequence.
+
+---
+
+### 7. assert_on_type_not_value
+
+**Before (slop)**:
+```typescript
+it("creates logger with all levels", () => {
+  const logger = createMockLogger();
+  assert.equal(typeof logger.debug, "function");
+  assert.equal(typeof logger.info, "function");
+  assert.equal(typeof logger.warn, "function");
+  assert.equal(typeof logger.error, "function");
+});
+```
+
+**After (fixed)**:
+```typescript
+it("creates logger with all levels", () => {
+  const logger = createMockLogger();
+  assert.equal(typeof logger.debug, "function");
+  logger.info("test message", { key: "value" });
+  assert.equal(logger.entries.length, 1);
+  assert.equal(logger.entries[0].level, "info");
+});
+```
+
+---
+
+### 8. truthiness_only
+
+**Before (slop)**:
+```typescript
+it("finds matching entry", () => {
+  const entry = assertLogEntry(logger, "info", "message");
+  assert.ok(entry);
+});
+```
+
+**After (fixed)**:
+```typescript
+it("finds matching entry", () => {
+  const entry = assertLogEntry(logger, "info", "message");
+  assert.equal(entry.message, "message");
+  assert.equal(entry.level, "info");
+});
+```
+
+**Note**: If the test also calls assertion-equivalent helpers (like `assertLogEntry`), the rule does not fire.
+
+---
+
+### 9. no_negative_test
+
+**Before (slop)** — describe block with 5 tests, all positive:
+```typescript
+describe("validate", () => {
+  it("accepts valid email", () => { ... });
+  it("accepts valid phone", () => { ... });
+  it("accepts valid name", () => { ... });
+  // No test for what happens with INVALID input
+});
+```
+
+**After (fixed)**:
+```typescript
+describe("validate", () => {
+  it("accepts valid email", () => { ... });
+  it("accepts valid phone", () => { ... });
+  it("accepts valid name", () => { ... });
+  it("rejects invalid email", () => {
+    assert.throws(() => validate({ email: "not-an-email" }), /Invalid email/);
+  });
+});
+```
+
+---
+
+### 10. duplicate_assertion_set
+
+**Before (slop)** — two tests with identical assertion patterns:
+```typescript
+it("status code removal is breaking", () => {
+  const result = classifyStatusCodeChanges([200, 400, 404], [200, 400]);
+  assert.equal(result.safe, false);
+  assert.equal(result.removed.length, 1);
+});
+
+it("enum value removal is breaking", () => {
+  const result = classifyEnumValueChanges(["draft", "published"], ["draft"]);
+  assert.equal(result.safe, false);
+  assert.equal(result.removed.length, 1);
+});
+```
+
+These test different functions but have identical assertion shapes. The rule flags this as should-fail to prompt review — the tests may be correct but should differentiate their assertions.
+
+---
+
+### 11. assert_return_type_only
+
+**Before (slop)**:
+```typescript
+it("creates valid config", () => {
+  const result = createConfig({ debug: true });
+  assert.ok(result);  // only checks non-null
+});
+```
+
+**After (fixed)**:
+```typescript
+it("creates valid config", () => {
+  const result = createConfig({ debug: true });
+  assert.equal(result.debug, true);
+  assert.equal(result.logLevel, "debug");
+});
+```
+
+---
+
+### 12. no_input_variation
+
+**Before (slop)** — same function called with identical args in sibling tests:
+```typescript
+it("test A", () => {
+  assert.equal(classify("error"), "high");
+});
+
+it("test B", () => {
+  assert.ok(classify("error"));  // same input!
+});
+```
+
+**After (fixed)**:
+```typescript
+it("classifies error keywords as high", () => {
+  assert.equal(classify("error"), "high");
+});
+
+it("classifies info keywords as low", () => {
+  assert.equal(classify("info"), "low");
+});
+```
