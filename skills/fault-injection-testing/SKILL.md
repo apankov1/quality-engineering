@@ -24,6 +24,21 @@ Production systems fail. Databases time out. Networks reset. Services degrade. I
 
 ---
 
+## What To Protect (Start Here)
+
+Before generating fault tests, identify which resilience decisions apply to your code:
+
+| Decision | Question to Answer | If Yes → Use |
+|----------|--------------------|--------------|
+| Service degradation must not cascade | Does this code call an external service that other callers also depend on? | `CircuitBreaker` |
+| Retries must not overwhelm the target | Can multiple clients retry simultaneously after an outage? | `RetryPolicy` with jitter |
+| Failed operations must not lose queued work | Is there a queue or buffer that persists across retries? | `assertQueuePreserved` |
+| Faults must be tested at boundaries, not inside logic | Where does your code cross a system boundary (DB, network, external API)? | `createFaultInjector` |
+
+**Do not generate tests for decisions the human hasn't confirmed.** A circuit breaker test that verifies state transitions without connecting to a real failure scenario (cascading outage, thundering herd) is testing the mechanism, not the decision.
+
+---
+
 ## Included Utilities
 
 ```typescript
@@ -96,39 +111,33 @@ describe('circuit breaker', () => {
     assert.equal(cb.getState(), 'open');
   });
 
-  it('transitions to half-open after timeout', async () => {
-    const cb = new CircuitBreaker({ failureThreshold: 1, resetTimeout: 50 });
+  // Use fake clock (inject nowFn) — no setTimeout, no flake
+  it('transitions to half-open after timeout', () => {
+    let now = 0;
+    const cb = new CircuitBreaker({ failureThreshold: 1, resetTimeout: 50 }, () => now);
     cb.recordFailure();
-    await new Promise(r => setTimeout(r, 60));
+    now = 60;
     assert.equal(cb.getState(), 'half-open');
   });
 
-  it('closes on success in half-open', async () => {
-    const cb = new CircuitBreaker({ failureThreshold: 1, resetTimeout: 10 });
+  it('closes on success in half-open', () => {
+    let now = 0;
+    const cb = new CircuitBreaker({ failureThreshold: 1, resetTimeout: 10 }, () => now);
     cb.recordFailure();
-    await new Promise(r => setTimeout(r, 20));
+    now = 20;
     cb.recordSuccess();
     assert.equal(cb.getState(), 'closed');
   });
 
-  it('reopens on failure in half-open', async () => {
-    const cb = new CircuitBreaker({ failureThreshold: 1, resetTimeout: 10 });
+  it('reopens on failure in half-open', () => {
+    let now = 0;
+    const cb = new CircuitBreaker({ failureThreshold: 1, resetTimeout: 10 }, () => now);
     cb.recordFailure();
-    await new Promise(r => setTimeout(r, 20));
+    now = 20;
     cb.recordFailure();
     assert.equal(cb.getState(), 'open');
   });
 });
-```
-
-Use a fake clock in tests (no `setTimeout()` flake):
-
-```typescript
-let now = 0;
-const cb = new CircuitBreaker({ failureThreshold: 1, resetTimeout: 50 }, () => now);
-cb.recordFailure();
-now = 60;
-expect(cb.getState()).toBe('half-open');
 ```
 
 ### Step 4: Implement Retry Policy with Backoff
@@ -139,7 +148,7 @@ Exponential backoff with jitter prevents thundering herd:
 const policy = new RetryPolicy({
   maxRetries: 5,
   baseDelay: 100,
-  maxDelay: 30000,
+  maxDelay: 30000,     // Hard cap: final jittered delay never exceeds this
   jitterFactor: 0.1,  // ±10% randomization
 }, Math.random);
 
@@ -153,6 +162,8 @@ Inject deterministic RNG for stable tests:
 const low = new RetryPolicy({ maxRetries: 3, baseDelay: 1000, jitterFactor: 0.1 }, () => 0);
 const high = new RetryPolicy({ maxRetries: 3, baseDelay: 1000, jitterFactor: 0.1 }, () => 1);
 ```
+
+`RetryPolicy` and `CircuitBreaker` validate numeric config and throw on invalid values (negative delays, non-integer thresholds/retry counts, jitter outside `[0, 1]`).
 
 ### Step 5: Test Backoff Calculations
 

@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import {
   classifyApiFieldSemantics,
+  classifyDeserializerSafety,
   classifyEnumValueChanges,
   classifyEventTypeChanges,
   classifyFieldChange,
@@ -30,35 +31,19 @@ describe("contract field changes (category 1)", () => {
     assert.equal(classifyFieldChange({ action: "add", optional: false }), "breaking");
   });
 
-  // Defect: field removal silently breaks all consumers still reading it.
-  // Before fix: removal was unclassified (fell through switch).
-  // After fix: explicit 'breaking' for remove/rename.
-  it("removing field is breaking", () => {
-    assert.equal(classifyFieldChange({ action: "remove" }), "breaking");
+  // Defect: field removal/rename/narrow/required promotion break backwards compatibility.
+  // Before fix: some actions were not explicitly classified.
+  it("classifies irreversible actions as breaking", () => {
+    const actions = ["remove", "rename", "narrow", "make_required"] as const;
+    const results = actions.map((action) => classifyFieldChange({ action }));
+    assert.deepEqual(results, ["breaking", "breaking", "breaking", "breaking"]);
   });
 
-  it("renaming field is breaking", () => {
-    assert.equal(classifyFieldChange({ action: "rename" }), "breaking");
-  });
-
-  // Defect: narrowing a type (e.g., string → enum) rejects valid old data.
-  // Widening (e.g., enum → string) accepts all old data — safe.
-  it("widening type is safe", () => {
-    assert.equal(classifyFieldChange({ action: "widen" }), "safe");
-  });
-
-  it("narrowing type is breaking", () => {
-    assert.equal(classifyFieldChange({ action: "narrow" }), "breaking");
-  });
-
-  // Defect: making a field required breaks old data that omits it.
-  // Making optional is always safe — old data still valid.
-  it("making optional is safe", () => {
-    assert.equal(classifyFieldChange({ action: "make_optional" }), "safe");
-  });
-
-  it("making required is breaking", () => {
-    assert.equal(classifyFieldChange({ action: "make_required" }), "breaking");
+  // Defect: widening types and making fields optional should remain backward compatible.
+  it("classifies widening and optionalization as safe", () => {
+    const actions = ["widen", "make_optional"] as const;
+    const results = actions.map((action) => classifyFieldChange({ action }));
+    assert.deepEqual(results, ["safe", "safe"]);
   });
 
   it("throws on unknown action", () => {
@@ -68,6 +53,7 @@ describe("contract field changes (category 1)", () => {
 });
 
 describe("serialized state schema (category 5)", () => {
+  // slop-ignore: no_negative_test — this classifier reports violations in return values, not thrown errors.
   it("all fields with .catch() is safe", () => {
     const result = classifySerializedSchema([
       { name: "version", hasCatchDefault: true },
@@ -105,7 +91,61 @@ describe("serialized state schema (category 5)", () => {
   });
 });
 
+describe("deserializer safety (category 5)", () => {
+  // slop-ignore: no_negative_test — parser safety is modeled as safe=false with violation metadata.
+  it("safeParse in fromJSON is safe", () => {
+    const result = classifyDeserializerSafety(`
+class State {
+  static fromJSON(json: unknown) {
+    const parsed = Schema.safeParse(json);
+    if (!parsed.success) return new State();
+    return new State();
+  }
+}
+`);
+    assert.deepEqual(result, { safe: true, violations: [] });
+  });
+
+  it("parse in fromJSON is breaking", () => {
+    const result = classifyDeserializerSafety(`
+class State {
+  static fromJSON(json: unknown) {
+    return Schema.parse(json);
+  }
+}
+`);
+    assert.equal(result.safe, false);
+    assert.equal(result.violations.length, 1);
+    assert.equal(result.violations[0].line, 4);
+  });
+
+  it("parse outside fromJSON is ignored", () => {
+    const result = classifyDeserializerSafety(`
+const value = Schema.parse(input);
+class State {
+  static fromJSON(json: unknown) {
+    return Schema.safeParse(json);
+  }
+}
+`);
+    assert.equal(result.safe, true);
+    assert.deepEqual(result.violations, []);
+  });
+
+  it("single-line fromJSON does not leak detection scope", () => {
+    const result = classifyDeserializerSafety(`
+class State {
+  static fromJSON(json: unknown) { return Schema.parse(json); }
+}
+const value = Schema.parse(input);
+`);
+    assert.equal(result.safe, false);
+    assert.equal(result.violations.length, 1);
+  });
+});
+
 describe("event type changes (category 6)", () => {
+  // slop-ignore: no_negative_test — event compatibility is expressed as diff output, not exceptions.
   it("no changes is safe", () => {
     const result = classifyEventTypeChanges(["USER_CREATED", "ORDER_PLACED"], ["USER_CREATED", "ORDER_PLACED"]);
     assert.equal(result.safe, true);
@@ -127,8 +167,7 @@ describe("event type changes (category 6)", () => {
   it("removing event type is breaking", () => {
     const result = classifyEventTypeChanges(["USER_CREATED", "ORDER_PLACED"], ["USER_CREATED"]);
     assert.equal(result.safe, false);
-    assert.equal(result.removed.length, 1);
-    assert.ok(result.removed.includes("ORDER_PLACED"));
+    assert.deepEqual(result.removed, ["ORDER_PLACED"]);
   });
 
   // Defect: renaming an event type = removal + addition. Both old and new appear.
@@ -140,10 +179,8 @@ describe("event type changes (category 6)", () => {
       ["ORDER_CREATED"], // renamed
     );
     assert.equal(result.safe, false);
-    assert.equal(result.removed.length, 1);
-    assert.equal(result.added.length, 1);
-    assert.ok(result.removed.includes("ORDER_PLACED"));
-    assert.ok(result.added.includes("ORDER_CREATED"));
+    assert.deepEqual(result.removed, ["ORDER_PLACED"]);
+    assert.deepEqual(result.added, ["ORDER_CREATED"]);
   });
 
   it("mixed: some added, some removed", () => {
@@ -155,6 +192,8 @@ describe("event type changes (category 6)", () => {
 });
 
 describe("api-level compatibility checks", () => {
+  // slop-ignore: no_negative_test — compatibility checks intentionally return diagnostics instead of throwing.
+  // Defect: removing a status code breaks clients that branch on it (e.g., 404 handler becomes dead code).
   it("status code removal is breaking", () => {
     const result = classifyStatusCodeChanges([200, 400, 404], [200, 400]);
     assert.equal(result.safe, false);
@@ -167,6 +206,7 @@ describe("api-level compatibility checks", () => {
     assert.deepEqual(result.added, [202]);
   });
 
+  // Defect: removing an enum value breaks clients that store it — existing records fail validation.
   it("enum value removal is breaking", () => {
     const result = classifyEnumValueChanges(["draft", "published"], ["draft"]);
     assert.equal(result.safe, false);
@@ -179,13 +219,32 @@ describe("api-level compatibility checks", () => {
     assert.deepEqual(result.added, ["archived"]);
   });
 
+  // Defect: semantic meaning change (dollars → cents) silently corrupts calculations — same type, different unit.
   it("semantic meaning changes are breaking", () => {
     const result = classifyApiFieldSemantics(
       [{ name: "amount", type: "number", required: true, semantic: "dollars" }],
       [{ name: "amount", type: "number", required: true, semantic: "cents" }],
     );
     assert.equal(result.safe, false);
-    assert.ok(result.breaking.some((v) => v.includes("semantic changed")));
+    assert.equal(result.breaking[0], "amount: semantic changed from dollars to cents");
+  });
+
+  it("semantic removal is breaking", () => {
+    const result = classifyApiFieldSemantics(
+      [{ name: "amount", type: "number", required: true, semantic: "cents" }],
+      [{ name: "amount", type: "number", required: true }],
+    );
+    assert.deepEqual(result.breaking, ["amount: semantic changed from cents to <unspecified>"]);
+    assert.equal(result.added.length, 0);
+  });
+
+  it("semantic introduction is breaking", () => {
+    const result = classifyApiFieldSemantics(
+      [{ name: "amount", type: "number", required: true }],
+      [{ name: "amount", type: "number", required: true, semantic: "cents" }],
+    );
+    assert.match(result.breaking[0], /semantic changed from <unspecified> to cents/);
+    assert.equal(result.safe, false);
   });
 
   it("new required fields are breaking", () => {
@@ -196,8 +255,8 @@ describe("api-level compatibility checks", () => {
         { name: "tenantId", type: "string", required: true },
       ],
     );
-    assert.equal(result.safe, false);
-    assert.ok(result.breaking.some((v) => v.includes("tenantId: new required field")));
+    assert.ok(result.breaking.includes("tenantId: new required field"));
+    assert.equal(result.breaking.length, 1);
   });
 
   it("new optional fields are safe additions", () => {
@@ -208,8 +267,8 @@ describe("api-level compatibility checks", () => {
         { name: "traceId", type: "string", required: false },
       ],
     );
-    assert.equal(result.safe, true);
     assert.deepEqual(result.added, ["traceId"]);
+    assert.equal(result.breaking.length, 0);
   });
 
   it("field removal is breaking", () => {
@@ -220,17 +279,17 @@ describe("api-level compatibility checks", () => {
       ],
       [{ name: "id", type: "string", required: true }],
     );
-    assert.equal(result.safe, false);
-    assert.ok(result.breaking.some((v) => v.includes("name: removed")));
+    assert.deepEqual(result.breaking, ["name: removed"]);
   });
 
+  // Defect: type change (string → number) breaks deserialization — runtime crash at parse site.
   it("type change is breaking", () => {
     const result = classifyApiFieldSemantics(
       [{ name: "amount", type: "string", required: true }],
       [{ name: "amount", type: "number", required: true }],
     );
-    assert.equal(result.safe, false);
-    assert.ok(result.breaking.some((v) => v.includes("type changed from string to number")));
+    assert.match(result.breaking.join("|"), /amount: type changed from string to number/);
+    assert.equal(result.added.length, 0);
   });
 
   it("optional-to-required promotion is breaking", () => {
@@ -238,8 +297,8 @@ describe("api-level compatibility checks", () => {
       [{ name: "email", type: "string", required: false }],
       [{ name: "email", type: "string", required: true }],
     );
+    assert.deepEqual(result.breaking, ["email: made required"]);
     assert.equal(result.safe, false);
-    assert.ok(result.breaking.some((v) => v.includes("email: made required")));
   });
 
   it("no changes is safe", () => {
@@ -268,8 +327,6 @@ describe("api-level compatibility checks", () => {
 
   it("no changes to enum values is safe", () => {
     const result = classifyEnumValueChanges(["draft", "published"], ["draft", "published"]);
-    assert.equal(result.safe, true);
-    assert.equal(result.removed.length, 0);
-    assert.equal(result.added.length, 0);
+    assert.deepEqual(result, { safe: true, removed: [], added: [] });
   });
 });

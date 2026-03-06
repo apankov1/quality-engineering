@@ -29,6 +29,19 @@ describe("createFaultScenario", () => {
 // ============================================================================
 
 describe("CircuitBreaker", () => {
+  describe("config validation", () => {
+    // Defect: Invalid thresholds can silently disable protection and cause cascading outages.
+    it("throws on invalid configuration", () => {
+      assert.throws(() => new CircuitBreaker({ failureThreshold: 0, resetTimeout: 1000 }), /failureThreshold/);
+      assert.throws(() => new CircuitBreaker({ failureThreshold: 2.5, resetTimeout: 1000 }), /failureThreshold/);
+      assert.throws(() => new CircuitBreaker({ failureThreshold: 1, resetTimeout: -1 }), /resetTimeout/);
+      assert.throws(
+        () => new CircuitBreaker({ failureThreshold: 1, resetTimeout: 1000, successThreshold: 0 }),
+        /successThreshold/,
+      );
+    });
+  });
+
   describe("initial state", () => {
     // Defect: Circuit must start closed
     it("starts in closed state", () => {
@@ -106,10 +119,13 @@ describe("CircuitBreaker", () => {
       now = 20;
 
       cb.recordSuccess();
-      assert.equal(cb.getState(), "half-open"); // Still half-open
+      const statsAfterFirstSuccess = cb.getStats();
+      assert.equal(statsAfterFirstSuccess.state, "half-open"); // Still half-open
+      assert.equal(statsAfterFirstSuccess.successes, 1);
 
       cb.recordSuccess();
       assert.equal(cb.getState(), "closed"); // Now closed
+      assert.equal(cb.getStats().successes, 0);
     });
   });
 
@@ -148,6 +164,16 @@ describe("CircuitBreaker", () => {
 // ============================================================================
 
 describe("RetryPolicy", () => {
+  describe("config validation", () => {
+    // Defect: Invalid retry limits can disable resilience or cause unbounded retry loops.
+    it("throws for invalid maxRetries and maxDelay", () => {
+      assert.throws(() => new RetryPolicy({ maxRetries: -1, baseDelay: 100 }), /maxRetries/);
+      assert.throws(() => new RetryPolicy({ maxRetries: 2.5, baseDelay: 100 }), /maxRetries/);
+      assert.throws(() => new RetryPolicy({ maxRetries: 3, baseDelay: 100, maxDelay: -1 }), /maxDelay/);
+      assert.throws(() => new RetryPolicy({ maxRetries: 3, baseDelay: 100, maxDelay: Number.NaN }), /maxDelay/);
+    });
+  });
+
   describe("getDelayWithoutJitter", () => {
     // Defect: Base delay for attempt 0
     it("returns base delay for attempt 0", () => {
@@ -158,7 +184,6 @@ describe("RetryPolicy", () => {
     // Defect: Exponential backoff must double each attempt
     it("doubles delay for each attempt", () => {
       const policy = new RetryPolicy({ maxRetries: 5, baseDelay: 100 });
-      assert.equal(policy.getDelayWithoutJitter(0), 100);
       assert.equal(policy.getDelayWithoutJitter(1), 200);
       assert.equal(policy.getDelayWithoutJitter(2), 400);
       assert.equal(policy.getDelayWithoutJitter(3), 800);
@@ -167,7 +192,6 @@ describe("RetryPolicy", () => {
     // Defect: Must cap at maxDelay
     it("caps at maxDelay", () => {
       const policy = new RetryPolicy({ maxRetries: 10, baseDelay: 100, maxDelay: 500 });
-      assert.equal(policy.getDelayWithoutJitter(0), 100);
       assert.equal(policy.getDelayWithoutJitter(5), 500); // Would be 3200
       assert.equal(policy.getDelayWithoutJitter(10), 500);
     });
@@ -176,6 +200,12 @@ describe("RetryPolicy", () => {
     it("returns 0 for negative attempt", () => {
       const policy = new RetryPolicy({ maxRetries: 3, baseDelay: 100 });
       assert.equal(policy.getDelayWithoutJitter(-1), 0);
+    });
+
+    // Defect: Negative or non-finite base delay breaks retry scheduling and can create busy loops.
+    it("throws for invalid base delay config", () => {
+      assert.throws(() => new RetryPolicy({ maxRetries: 3, baseDelay: -1 }), /baseDelay/);
+      assert.throws(() => new RetryPolicy({ maxRetries: 3, baseDelay: Number.NaN }), /baseDelay/);
     });
   });
 
@@ -220,9 +250,22 @@ describe("RetryPolicy", () => {
       assert.equal(nanRng.getDelay(0), 1000); // 0.5 => zero jitter
       assert.equal(infRng.getDelay(0), 1000); // 0.5 => zero jitter
     });
+
+    // Defect: If capped delay can exceed maxDelay after jitter, retries violate outage-control caps.
+    it("never exceeds maxDelay after jitter", () => {
+      const policy = new RetryPolicy({ maxRetries: 5, baseDelay: 1000, maxDelay: 500, jitterFactor: 0.5 }, () => 1);
+      assert.equal(policy.getDelay(3), 500);
+    });
+
+    // Defect: Out-of-range jitter causes unstable delay windows and retry storms.
+    it("throws when jitterFactor is outside [0, 1]", () => {
+      assert.throws(() => new RetryPolicy({ maxRetries: 5, baseDelay: 1000, jitterFactor: -0.1 }), /jitterFactor/);
+      assert.throws(() => new RetryPolicy({ maxRetries: 5, baseDelay: 1000, jitterFactor: 1.1 }), /jitterFactor/);
+    });
   });
 
   describe("shouldRetry", () => {
+    // slop-ignore: no_negative_test — this predicate intentionally returns false for invalid attempts instead of throwing.
     // Defect: Must allow retries up to maxRetries
     it("allows retries up to maxRetries", () => {
       const policy = new RetryPolicy({ maxRetries: 3, baseDelay: 100 });
@@ -237,6 +280,12 @@ describe("RetryPolicy", () => {
     it("returns false for negative attempts", () => {
       const policy = new RetryPolicy({ maxRetries: 3, baseDelay: 100 });
       assert.equal(policy.shouldRetry(-1), false);
+    });
+
+    // Defect: Fractional attempts are invalid and can produce inconsistent retry accounting.
+    it("returns false for non-integer attempts", () => {
+      const policy = new RetryPolicy({ maxRetries: 3, baseDelay: 100 });
+      assert.equal(policy.shouldRetry(0.5), false);
     });
   });
 
@@ -288,11 +337,18 @@ describe("createFaultInjector", () => {
 
   // Defect: Async original must still work when no fault injected
   it("preserves async behavior when no fault", async () => {
-    const original = async (x: number) => x * 2;
+    let called = false;
+    const original = async (x: number) => {
+      called = true;
+      return x * 2;
+    };
     const injector = createFaultInjector(original, { timeout: new Error("Timeout") });
 
-    const result = await injector(null, 5);
+    const resultPromise = injector(null, 5);
+    assert.ok(resultPromise instanceof Promise);
+    const result = await resultPromise;
     assert.equal(result, 10);
+    assert.equal(called, true);
   });
 
   // Defect: Sync throw for async-wrapped functions is intentional —

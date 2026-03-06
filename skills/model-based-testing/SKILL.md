@@ -25,6 +25,19 @@ Model-based derives **which state transitions** to test. [Pairwise testing](http
 
 **Rule of thumb**: if you're testing *what happens next*, use model-based. If you're testing *what goes in*, use pairwise.
 
+## What To Protect (Start Here)
+
+State machine tests protect against **invalid transitions** — states that should be unreachable but aren't. Before generating a transition matrix, identify which decisions apply:
+
+| Decision | Question to Answer | If Yes → Use |
+|----------|--------------------|--------------|
+| Invalid transitions must be impossible | Which state changes are explicitly forbidden? | `getInvalidTransitionPairs` |
+| Guards must enforce access control | Do boolean conditions gate transitions (permissions, flags, locks)? | `assertGuardTruthTable` |
+| Side effects must be exact | Do transitions modify counters, timestamps, or flags? | `assertContextMutation` |
+| Terminal states must be final | Are there states with no valid exit (completed, cancelled, archived)? | `getTerminalStates` |
+
+**Do not generate tests for decisions the human hasn't confirmed.** A 25-test transition matrix that just verifies `canTransition()` returns true/false without connecting to business rules (who can approve? when can you go back to draft?) is testing the map, not the territory.
+
 ## Rationalizations (Do Not Skip)
 
 | Rationalization | Why It's Wrong | Required Action |

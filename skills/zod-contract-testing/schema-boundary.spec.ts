@@ -116,7 +116,7 @@ describe("testValidInput", () => {
   // Defect: Must pass when input is valid
   it("passes for valid input", () => {
     const result = testValidInput(schema, { name: "Alice", age: 30 });
-    assert.ok(result);
+    assert.deepEqual(result, { name: "Alice", age: 30 });
   });
 
   // Defect: Must throw with details when input is invalid
@@ -170,7 +170,7 @@ describe("testSchemaEvolution", () => {
     const oldData = { name: "Alice" }; // No age field
 
     const result = testSchemaEvolution(schema, oldData);
-    assert.ok(result);
+    assert.deepEqual(result, oldData);
   });
 
   // Defect: Must throw with context when evolution breaks

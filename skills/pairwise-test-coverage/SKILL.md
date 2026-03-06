@@ -23,6 +23,18 @@ Pairwise selects **which input combinations** to test. [Model-based testing](htt
 
 **Rule of thumb**: if you're testing *what goes in*, use pairwise. If you're testing *what happens next*, use model-based.
 
+## What To Protect (Start Here)
+
+Pairwise coverage protects against **interaction bugs** — defects that only appear when two specific factor values combine. Before generating a matrix, identify which factors interact:
+
+| Decision | Question to Answer | If Yes → Use |
+|----------|--------------------|--------------|
+| Factor combinations cause different behavior | Do any two parameters interact to produce a unique code path? | `generatePairwiseMatrix` |
+| Critical factors need stronger coverage | Are some factors higher-risk (auth, payment, region)? | `factorWeights` option |
+| Three-way interactions are plausible | Could a bug require three specific values to trigger? | `strength: 3` option |
+
+**Do not generate tests for decisions the human hasn't confirmed.** A pairwise matrix with arbitrary factors produces coverage numbers without catching bugs — the human must identify which factors actually interact.
+
 ## Core Philosophy
 
 **Exhaustive testing doesn't scale.** If a system has 4 factors with 3 values each, that's 81 test cases. Pairwise testing covers all pair interactions in ~12 cases -- an 85% reduction with near-complete defect detection.

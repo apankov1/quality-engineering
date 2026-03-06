@@ -3,7 +3,7 @@
  *
  * Implements the detection logic from categories.md:
  * - Category 1: Contract field changes (add/remove/rename/widen/narrow)
- * - Category 5: Serialized state schema (.catch() default validation)
+ * - Category 5: Serialized state schema (.catch() defaults + safeParse usage)
  * - Category 6: Event sourcing schema (event type removal/rename detection)
  */
 
@@ -24,6 +24,17 @@ export interface SchemaField {
 export interface SchemaResult {
   safe: boolean;
   violations: string[];
+}
+
+export interface DeserializerViolation {
+  line: number;
+  message: string;
+  snippet: string;
+}
+
+export interface DeserializerResult {
+  safe: boolean;
+  violations: DeserializerViolation[];
 }
 
 export interface EventTypeChangeResult {
@@ -103,6 +114,74 @@ export function classifySerializedSchema(fields: SchemaField[]): SchemaResult {
 }
 
 /**
+ * Detect strict `.parse()` usage inside `fromJSON()` methods.
+ *
+ * Rule `strict_parse_in_deserialize` (categories.md Category 5):
+ * deserialization paths should use `safeParse()` with graceful fallback
+ * to avoid crashing on stale persisted payloads.
+ */
+export function classifyDeserializerSafety(sourceText: string): DeserializerResult {
+  const lines = sourceText.split(/\r?\n/);
+  const violations: DeserializerViolation[] = [];
+
+  let braceDepth = 0;
+  let inFromJsonBlock = false;
+  let pendingFromJsonSignature = false;
+  let fromJsonEntryDepth = 0;
+
+  for (let index = 0; index < lines.length; index++) {
+    const line = lines[index];
+    const trimmed = line.trim();
+
+    const opens = (line.match(/{/g) ?? []).length;
+    const closes = (line.match(/}/g) ?? []).length;
+
+    const fromJsonSignature =
+      /\bfromJSON\s*\([^)]*\)/.test(line) ||
+      /\bfromJSON\s*=\s*\([^)]*\)\s*=>/.test(line) ||
+      /\bfromJSON\s*:\s*\([^)]*\)\s*=>/.test(line);
+    const startsBlock = line.includes("{");
+    const startsFromJson = fromJsonSignature && startsBlock;
+
+    if (!inFromJsonBlock && startsFromJson) {
+      inFromJsonBlock = true;
+      pendingFromJsonSignature = false;
+      fromJsonEntryDepth = braceDepth + 1;
+    } else if (!inFromJsonBlock && fromJsonSignature) {
+      pendingFromJsonSignature = true;
+    } else if (!inFromJsonBlock && pendingFromJsonSignature && startsBlock) {
+      inFromJsonBlock = true;
+      pendingFromJsonSignature = false;
+      fromJsonEntryDepth = braceDepth + 1;
+    } else if (pendingFromJsonSignature && trimmed.endsWith(";")) {
+      pendingFromJsonSignature = false;
+    }
+
+    if (
+      inFromJsonBlock &&
+      !trimmed.startsWith("//") &&
+      /\.\s*parse\s*\(/.test(line) &&
+      !/\.\s*safeParse\s*\(/.test(line)
+    ) {
+      violations.push({
+        line: index + 1,
+        message: "fromJSON uses .parse(); use .safeParse() with fallback",
+        snippet: trimmed,
+      });
+    }
+
+    braceDepth += opens - closes;
+
+    if (inFromJsonBlock && braceDepth < fromJsonEntryDepth) {
+      inFromJsonBlock = false;
+      fromJsonEntryDepth = 0;
+    }
+  }
+
+  return { safe: violations.length === 0, violations };
+}
+
+/**
  * Compare two versions of an event type set and detect breaking changes.
  *
  * From categories.md Category 6:
@@ -178,8 +257,10 @@ export function classifyApiFieldSemantics(
     if (!oldField.required && updatedField.required) {
       breaking.push(`${oldField.name}: made required`);
     }
-    if (oldField.semantic && updatedField.semantic && oldField.semantic !== updatedField.semantic) {
-      breaking.push(`${oldField.name}: semantic changed`);
+    if (oldField.semantic !== updatedField.semantic) {
+      const before = oldField.semantic ?? "<unspecified>";
+      const after = updatedField.semantic ?? "<unspecified>";
+      breaking.push(`${oldField.name}: semantic changed from ${before} to ${after}`);
     }
   }
 

@@ -15,7 +15,7 @@ These skills teach AI coding agents (Claude Code, Cursor, etc.) rigorous testing
 | Skill | What It Does | Key Innovation |
 |-------|-------------|----------------|
 | **barrier-concurrency-testing** | Deterministic race condition testing via barriers | Replaces flaky setTimeout-based timing tests with reproducible interleaving |
-| **breaking-change-detector** | 6-category breaking change analysis | Tolerant reader pattern for safe schema evolution |
+| **breaking-change-detector** | 6-category compatibility audit (4 executable + 2 checklist-driven) | Tolerant reader pattern for safe schema evolution |
 | **fault-injection-testing** | Circuit breaker, retry policy, queue preservation | Executable resilience primitives with state machine transitions |
 | **model-based-testing** | State machine transition matrices and guard truth tables | N*N transition coverage, context mutation assertions |
 | **observability-testing** | Structured log assertions and level policy enforcement | Mock logger with 5 assertion types, level classification heuristic |
@@ -39,10 +39,10 @@ node --experimental-strip-types --test skills/*/*.spec.ts
 # Barrier concurrency: 7 tests for deterministic race condition patterns
 node --experimental-strip-types --test skills/barrier-concurrency-testing/test-fixtures.spec.ts
 
-# Breaking change detector: 16 tests for field classification, schema validation, event type changes
+# Breaking change detector: 37 tests for field classification, deserializer safety, schema validation, event type changes
 node --experimental-strip-types --test skills/breaking-change-detector/breaking-change.spec.ts
 
-# Fault injection: 29 tests for circuit breaker, retry policy, queue preservation
+# Fault injection: 38 tests for circuit breaker, retry policy, queue preservation, and config validation
 node --experimental-strip-types --test skills/fault-injection-testing/fault-injection.spec.ts
 
 # Model-based testing: 31 tests for state machines, guard truth tables, context mutations
@@ -104,9 +104,9 @@ Do not test race conditions with `setTimeout` and hope. This skill teaches agent
 
 ### breaking-change-detector
 
-Detects breaking changes across 6 categories that could disrupt active sessions or lose client compatibility. Uses the tolerant reader pattern for safe schema evolution.
+Audits breaking changes across 6 categories that could disrupt active sessions or lose client compatibility. Ships executable checks for contracts, API diffs, serialized state, and event types; DB and WebSocket checks are checklist/static-analysis guided.
 
-- **`breaking-change.ts`** -- Field change classifier and serialized schema validator
+- **`breaking-change.ts`** -- Field change classifier, deserializer safety checker (`.parse()` vs `.safeParse()`), serialized schema validator
 - 6 detection categories: contracts, database schema, RPC/API, WebSocket protocol, serialized state, event sourcing
 - Backward compatibility checklist for schema/contract changes
 - Output format template: CRITICAL (disrupts sessions) / WARNING (migration required) / SAFE

@@ -24,6 +24,21 @@ Instead of `setTimeout` (flaky) or `sleep` (slow), use **barriers** to pause exe
 
 ---
 
+## What To Protect (Start Here)
+
+Before generating barrier tests, identify which concurrency decisions apply to your code:
+
+| Decision | Question to Answer | If Yes → Use |
+|----------|--------------------|--------------|
+| Concurrent writes must not lose data | Can two writes to the same resource happen simultaneously? | `assertPreservesConcurrentItems` |
+| Failed operations must not corrupt state | Can a failure leave behind partial or inconsistent state? | `assertPreservesOnFailure` |
+| Event/message ordering must be preserved | Does processing order affect correctness? | `assertSequenceContinuity` |
+| Retry state must reset on new input | Can stale retry counts or error flags affect new operations? | `assertRetryCountReset` |
+
+**Do not generate tests for decisions the human hasn't confirmed.** A barrier test without a named invariant is coverage theater — it proves the barrier works, not that the system is correct.
+
+---
+
 ## Included Utilities
 
 ```typescript

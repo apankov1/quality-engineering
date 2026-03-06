@@ -24,6 +24,22 @@ Schemas define contracts between systems. A schema that accepts invalid data is 
 
 ---
 
+## What To Protect (Start Here)
+
+Before generating schema tests, identify which data integrity decisions apply to your code:
+
+| Decision | Question to Answer | If Yes → Use |
+|----------|--------------------|--------------|
+| Invalid data must be rejected with specific errors | What malformed inputs could reach this boundary? | `testInvalidInput` with `expectedPath` |
+| Schema changes must not break old data | Is there serialized/stored data in the old format? | `testSchemaEvolution` |
+| Version upgrades must be backward compatible | Do multiple schema versions coexist in production? | `generateVersionCompatibilityMatrix` |
+| Optional field combinations have hidden bugs | Does this schema have 3+ optional fields with interacting refinements? | `generateCompoundStateMatrix` |
+| Refinements must reject specific threats | What invalid-but-plausible input does each `.refine()` guard against? | `testRefinement` |
+
+**Do not generate tests for decisions the human hasn't confirmed.** A schema test that checks "valid input passes" without naming the threat it guards against is slop — it'll pass even if the schema accepts everything.
+
+---
+
 ## Included Utilities
 
 ```typescript

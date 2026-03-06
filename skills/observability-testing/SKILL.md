@@ -24,6 +24,21 @@ Logs are your only window into production behavior. If critical paths don't log 
 
 ---
 
+## What To Protect (Start Here)
+
+Before generating log assertions, identify which observability decisions apply to your code:
+
+| Decision | Question to Answer | If Yes → Use |
+|----------|--------------------|--------------|
+| Error paths must be debuggable from logs alone | Could an on-call engineer diagnose this failure without access to the request? | `assertLogEntry` with context fields |
+| Happy paths must not trigger alerts | Would a warn/error log here fire a PagerDuty alert on every success? | `assertNoLogsAbove` |
+| Log levels must match operational severity | Is this log classified correctly — would the wrong level cause alert fatigue or missed incidents? | `classifyLogLevel` |
+| Error logs must include the Error instance | Does the error log carry a stack trace for root cause analysis? | `assertErrorLogged` |
+
+**Do not generate tests for decisions the human hasn't confirmed.** A log assertion that checks "error was logged" without verifying the context contains fields an on-call engineer needs is slop — it passes while the team stays blind in production.
+
+---
+
 ## Included Utilities
 
 ```typescript

@@ -94,6 +94,9 @@ describe("generatePairwiseMatrix", () => {
     const validation = validateCoverage(factors, matrix);
     assert.equal(validation.valid, true);
     assert.equal(validation.coverage, 100);
+    assert.ok(matrix.every((row) => Object.prototype.hasOwnProperty.call(row, "a|f")));
+    assert.ok(matrix.some((row) => row["a|f"] === "x:y"));
+    assert.ok(matrix.some((row) => row["b:f"] === "n:m"));
   });
 
   it("supports 3-wise coverage", () => {
@@ -131,6 +134,8 @@ describe("generatePairwiseMatrix", () => {
     });
     assert.equal(validation.valid, true);
     assert.equal(validation.coverage, 100);
+    assert.ok(weighted.some((row) => row.criticalPath === "enabled" && row.auth === "token"));
+    assert.ok(weighted.some((row) => row.criticalPath === "disabled" && row.auth === "cookie"));
   });
 
   it("throws when 3-wise requested with fewer than 3 factors", () => {

@@ -37,7 +37,7 @@ Enumerate all failure modes for each external dependency:
 ## Backoff Calculation Reference
 
 ```
-delay(n) = min(baseDelay * 2^n, maxDelay) * (1 ± jitter)
+delay(n) = clamp(min(baseDelay * 2^n, maxDelay) * (1 ± jitter), 0, maxDelay)
 
 Example with base=100ms, max=30s, jitter=0.1:
   n=0: 100ms ± 10ms

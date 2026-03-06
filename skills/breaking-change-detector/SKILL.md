@@ -1,11 +1,11 @@
 ---
 name: breaking-change-detector
-description: "Detect breaking changes across 6 categories: contracts, database schemas, RPC endpoints, WebSocket protocols, serialized state, and event sourcing."
+description: "Audit 6 categories of breaking changes with executable checks for contracts, API diffs, serialized state, and event types."
 ---
 
 # Breaking Change Detector
 
-Detects breaking changes that could disrupt active sessions or lose client compatibility across 6 categories.
+Audits breaking changes that could disrupt active sessions or lose client compatibility across 6 categories. Includes executable utilities for categories 1, 3, 5, and 6; categories 2 and 4 are checklist/static-analysis guided.
 
 **When to use**: Modifying shared contract/interface packages, changing database schema or migrations, RPC/API endpoint signature changes, WebSocket message format changes, serialized state schema changes, before merging any contract/schema changes.
 
@@ -29,6 +29,7 @@ Detects breaking changes that could disrupt active sessions or lose client compa
 import {
   classifyFieldChange,
   classifySerializedSchema,
+  classifyDeserializerSafety,
   classifyEventTypeChanges,
   classifyStatusCodeChanges,
   classifyEnumValueChanges,
@@ -69,10 +70,10 @@ When modifying contracts or schemas:
 | 2. Database schema | -- | Doc-only (requires SQL diffing) |
 | 3. RPC/API endpoints | `classifyStatusCodeChanges()`, `classifyEnumValueChanges()`, `classifyApiFieldSemantics()` | Code + tests (API-level diff helpers) |
 | 4. WebSocket protocol | -- | Doc-only (requires message schema diffing) |
-| 5. Serialized state | `classifySerializedSchema()` | Code + tests |
+| 5. Serialized state | `classifySerializedSchema()`, `classifyDeserializerSafety()` | Code + tests |
 | 6. Event sourcing | `classifyEventTypeChanges()` | Code + tests |
 
-Categories 2-4 require static analysis of SQL migrations, OpenAPI specs, or protocol schemas -- tools beyond the scope of a pure-function utility. See [categories.md](./references/categories.md) for detection commands and safe patterns.
+Categories 2 and 4 require static analysis of SQL migrations or protocol schemas. Category 3 includes API-level helpers here, but full endpoint/spec diffing still needs OpenAPI/RPC schema tooling. See [categories.md](./references/categories.md) for detection commands and safe patterns.
 
 ## Output Format
 

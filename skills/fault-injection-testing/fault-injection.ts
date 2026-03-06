@@ -37,6 +37,18 @@ export function createFaultScenario(name: string, fault: string, expected: strin
   return { name, fault, expected };
 }
 
+function assertIntegerAtLeast(name: string, value: number, min: number): void {
+  if (!Number.isInteger(value) || value < min) {
+    throw new Error(`${name} must be an integer >= ${min}`);
+  }
+}
+
+function assertFiniteAtLeast(name: string, value: number, min: number): void {
+  if (!Number.isFinite(value) || value < min) {
+    throw new Error(`${name} must be a finite number >= ${min}`);
+  }
+}
+
 // ============================================================================
 // CIRCUIT BREAKER
 // ============================================================================
@@ -75,9 +87,14 @@ export class CircuitBreaker {
   private readonly nowFn: () => number;
 
   constructor(config: CircuitBreakerConfig, nowFn: () => number = Date.now) {
+    assertIntegerAtLeast("failureThreshold", config.failureThreshold, 1);
+    assertFiniteAtLeast("resetTimeout", config.resetTimeout, 0);
+    const successThreshold = config.successThreshold ?? 1;
+    assertIntegerAtLeast("successThreshold", successThreshold, 1);
+
     this.config = {
       ...config,
-      successThreshold: config.successThreshold ?? 1,
+      successThreshold,
     };
     this.nowFn = nowFn;
   }
@@ -184,10 +201,19 @@ export class RetryPolicy {
   private readonly randomFn: () => number;
 
   constructor(config: RetryPolicyConfig, randomFn: () => number = Math.random) {
+    assertIntegerAtLeast("maxRetries", config.maxRetries, 0);
+    assertFiniteAtLeast("baseDelay", config.baseDelay, 0);
+    const maxDelay = config.maxDelay ?? 30000;
+    assertFiniteAtLeast("maxDelay", maxDelay, 0);
+    const jitterFactor = config.jitterFactor ?? 0.1;
+    if (!Number.isFinite(jitterFactor) || jitterFactor < 0 || jitterFactor > 1) {
+      throw new Error("jitterFactor must be a finite number in [0, 1]");
+    }
+
     this.config = {
       ...config,
-      maxDelay: config.maxDelay ?? 30000,
-      jitterFactor: config.jitterFactor ?? 0.1,
+      maxDelay,
+      jitterFactor,
     };
     this.randomFn = randomFn;
   }
@@ -206,8 +232,8 @@ export class RetryPolicy {
     const rawRandom = this.randomFn();
     const unitRandom = Number.isFinite(rawRandom) ? Math.min(1, Math.max(0, rawRandom)) : 0.5;
     const jitter = cappedDelay * this.config.jitterFactor * (unitRandom * 2 - 1);
-
-    return Math.max(0, Math.round(cappedDelay + jitter));
+    const jitteredDelay = Math.round(cappedDelay + jitter);
+    return Math.min(this.config.maxDelay, Math.max(0, jitteredDelay));
   }
 
   /**
@@ -216,14 +242,14 @@ export class RetryPolicy {
   getDelayWithoutJitter(attempt: number): number {
     if (attempt < 0) return 0;
     const exponentialDelay = this.config.baseDelay * 2 ** attempt;
-    return Math.min(exponentialDelay, this.config.maxDelay);
+    return Math.max(0, Math.min(exponentialDelay, this.config.maxDelay));
   }
 
   /**
    * Check if retry should be attempted.
    */
   shouldRetry(attempt: number): boolean {
-    return attempt >= 0 && attempt < this.config.maxRetries;
+    return Number.isInteger(attempt) && attempt >= 0 && attempt < this.config.maxRetries;
   }
 
   /**

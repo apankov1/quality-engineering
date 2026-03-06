@@ -9,6 +9,7 @@ import {
 } from "./test-fixtures.ts";
 
 describe("createBarrier", () => {
+  // Defect: without blocking, concurrent operations race through critical sections.
   it("blocks until released", async () => {
     const barrier = createBarrier();
     let resolved = false;
@@ -17,8 +18,8 @@ describe("createBarrier", () => {
       resolved = true;
     });
 
-    // Not yet resolved
-    await new Promise((r) => setTimeout(r, 10));
+    // Flush microtask queue — if barrier.wait() resolved, the .then() would run
+    await Promise.resolve();
     assert.equal(resolved, false);
     assert.equal(barrier.released, false);
 
@@ -28,6 +29,7 @@ describe("createBarrier", () => {
     assert.equal(barrier.released, true);
   });
 
+  // Defect: if a barrier doesn't handle late arrivals, tests hang after early release.
   it("wait resolves immediately if already released", async () => {
     const barrier = createBarrier();
     barrier.release();
@@ -37,8 +39,10 @@ describe("createBarrier", () => {
 });
 
 describe("createTrackedBarrier + releaseAllBarriers", () => {
+  // slop-ignore: no_negative_test — lifecycle helpers expose non-throwing behavior; failure mode is blocked waiters.
   afterEach(() => releaseAllBarriers());
 
+  // Defect: without tracking, getActiveBarrierCount can't detect leaked barriers.
   it("tracks active barriers", () => {
     const before = getActiveBarrierCount();
     createTrackedBarrier();
@@ -46,6 +50,7 @@ describe("createTrackedBarrier + releaseAllBarriers", () => {
     assert.equal(getActiveBarrierCount(), before + 2);
   });
 
+  // Defect: without bulk release, orphaned barriers from mid-test failures block teardown.
   it("releaseAllBarriers releases and clears all", () => {
     const b1 = createTrackedBarrier();
     const b2 = createTrackedBarrier();
@@ -55,6 +60,7 @@ describe("createTrackedBarrier + releaseAllBarriers", () => {
     assert.equal(getActiveBarrierCount(), 0);
   });
 
+  // Defect: releaseAll must unblock pending waiters, not just mark released — else operations freeze.
   it("releaseAllBarriers unblocks waiters", async () => {
     const barrier = createTrackedBarrier();
     let resolved = false;
@@ -69,6 +75,7 @@ describe("createTrackedBarrier + releaseAllBarriers", () => {
 });
 
 describe("createTestItems", () => {
+  // Defect: sequence gaps in test data produce false positives in continuity assertions.
   it("creates sequential items", () => {
     const items = createTestItems(5, 3);
     assert.equal(items.length, 3);

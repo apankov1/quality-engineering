@@ -19,6 +19,7 @@ import {
  */
 
 describe("backoff with jitter (pattern 1)", () => {
+  // slop-ignore: no_negative_test — backoff helper is a pure calculator and encodes failure behavior as returned delays, not exceptions.
   it("grows exponentially", () => {
     const d0 = getBackoffDelay(0, 1000, 30000);
     const d3 = getBackoffDelay(3, 1000, 30000);
@@ -85,6 +86,7 @@ describe("backoff with jitter (pattern 1)", () => {
 });
 
 describe("circuit breaker (pattern 2)", () => {
+  // slop-ignore: no_negative_test — circuit transition is a pure state function; failure paths are asserted via returned states.
   it("stays closed below threshold", () => {
     assert.equal(circuitBreakerTransition("closed", 3, 5, false), "closed");
   });
@@ -98,6 +100,7 @@ describe("circuit breaker (pattern 2)", () => {
 
   it("stays open before cooldown", () => {
     assert.equal(circuitBreakerTransition("open", 5, 5, false), "open");
+    assert.notEqual(circuitBreakerTransition("open", 5, 5, false), "half-open");
   });
 
   it("transitions to half-open after cooldown", () => {
@@ -117,6 +120,7 @@ describe("circuit breaker (pattern 2)", () => {
 });
 
 describe("heartbeat hysteresis (pattern 3)", () => {
+  // slop-ignore: no_negative_test — heartbeat hysteresis is threshold classification; negatives are represented as false/true outcomes.
   // Defect: disconnecting on single missed heartbeat causes false disconnects.
   // Before fix: shouldDisconnect(1) returned true.
   // After fix: threshold=2 tolerates single-miss network blips.
@@ -138,6 +142,7 @@ describe("heartbeat hysteresis (pattern 3)", () => {
 });
 
 describe("command acknowledgment tracking (pattern 4)", () => {
+  // slop-ignore: no_negative_test — command tracker reports invalid/timeout states via return values and collections rather than throws.
   // Defect: commands sent during network blip are silently lost.
   // Before fix: ws.send() with no tracking — no way to detect unacknowledged commands.
   // After fix: every command tracked by ID, timed out if no server ack.
@@ -199,6 +204,7 @@ describe("command acknowledgment tracking (pattern 4)", () => {
 });
 
 describe("sequence gap detection (pattern 5)", () => {
+  // slop-ignore: no_negative_test — sequence gap detector reports missing counts in return values; it has no exception branch.
   it("detects no gap for sequential messages", () => {
     const result = detectSequenceGap(5, 6);
     assert.equal(result.gap, false);
@@ -221,6 +227,7 @@ describe("sequence gap detection (pattern 5)", () => {
 });
 
 describe("mobile-aware timeouts (pattern 6)", () => {
+  // slop-ignore: no_negative_test — timeout classifier is a pure bucket function with explicit risky/safe outputs.
   // Defect: 5s timeout causes false disconnects on mobile (P99 = 5-8s).
   // Before fix: classifyTimeout(5000) returned 'safe'.
   // After fix: anything under 10s classified as 'risky'.

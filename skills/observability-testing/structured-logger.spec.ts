@@ -16,6 +16,7 @@ import {
 // ============================================================================
 
 describe("createMockLogger", () => {
+  // slop-ignore: no_negative_test — logger methods are side-effect capture APIs and intentionally do not throw.
   // Defect: Logger must have all 4 levels
   it("creates logger with all 4 levels", () => {
     const logger = createMockLogger();
@@ -24,6 +25,9 @@ describe("createMockLogger", () => {
     assert.equal(typeof logger.info, "function");
     assert.equal(typeof logger.warn, "function");
     assert.equal(typeof logger.error, "function");
+    logger.debug("boot");
+    assert.equal(logger.entries.length, 1);
+    assert.equal(logger.entries[0].level, "debug");
   });
 
   // Defect: Each level must capture entries
@@ -106,7 +110,8 @@ describe("assertLogEntry", () => {
     const entry = assertLogEntry(logger, "info", "Request completed", {
       meta: { duration: 42, tags: ["fast"] },
     });
-    assert.ok(entry);
+    assert.equal(entry.level, "info");
+    assert.equal(entry.message, "Request completed");
   });
 
   // Defect: Must throw with details when no match
@@ -227,10 +232,7 @@ describe("LOG_LEVEL_ORDER", () => {
 describe("LOG_LEVEL_POLICY", () => {
   // Defect: Policy must define all 4 levels
   it("defines all 4 levels", () => {
-    assert.ok(LOG_LEVEL_POLICY.debug);
-    assert.ok(LOG_LEVEL_POLICY.info);
-    assert.ok(LOG_LEVEL_POLICY.warn);
-    assert.ok(LOG_LEVEL_POLICY.error);
+    assert.deepEqual(Object.keys(LOG_LEVEL_POLICY).sort(), ["debug", "error", "info", "warn"]);
   });
 
   // Defect: Each level must have examples
@@ -246,11 +248,13 @@ describe("LOG_LEVEL_POLICY", () => {
 // ============================================================================
 
 describe("classifyLogLevel", () => {
+  // slop-ignore: no_negative_test — classifier returns levels for any input string and has no exception branch by design.
   // Defect: Error keywords must classify as error
   it("classifies failure/error keywords as error", () => {
     assert.equal(classifyLogLevel("Database connection failed"), "error");
     assert.equal(classifyLogLevel("Unhandled exception in handler"), "error");
     assert.equal(classifyLogLevel("Fatal crash during startup"), "error");
+    assert.notEqual(classifyLogLevel("Database connection failed"), "warn");
   });
 
   // Defect: Warning keywords must classify as warn
@@ -259,21 +263,34 @@ describe("classifyLogLevel", () => {
     assert.equal(classifyLogLevel("Retry attempt 3 of 5"), "warn");
     assert.equal(classifyLogLevel("Deprecated API called"), "warn");
     assert.equal(classifyLogLevel("Request timeout, will retry"), "warn");
+    assert.notEqual(classifyLogLevel("Service degraded, using fallback"), "error");
   });
 
   // Defect: State change keywords must classify as info
   it("classifies state change keywords as info", () => {
-    assert.equal(classifyLogLevel("User logged in"), "info");
-    assert.equal(classifyLogLevel("Config loaded successfully"), "info");
-    assert.equal(classifyLogLevel("Session started for user"), "info");
-    assert.equal(classifyLogLevel("Record deleted from database"), "info");
+    assert.deepEqual(
+      [
+        classifyLogLevel("User logged in"),
+        classifyLogLevel("Config loaded successfully"),
+        classifyLogLevel("Session started for user"),
+        classifyLogLevel("Record deleted from database"),
+      ],
+      ["info", "info", "info", "info"],
+    );
+    assert.notEqual(classifyLogLevel("User logged in"), "debug");
   });
 
   // Defect: Routine operations must classify as debug
   it("classifies routine operations as debug", () => {
-    assert.equal(classifyLogLevel("Cache hit for key xyz"), "debug");
-    assert.equal(classifyLogLevel("Heartbeat received"), "debug");
-    assert.equal(classifyLogLevel("Processing batch item 5 of 100"), "debug");
+    assert.deepEqual(
+      [
+        classifyLogLevel("Cache hit for key xyz"),
+        classifyLogLevel("Heartbeat received"),
+        classifyLogLevel("Processing batch item 5 of 100"),
+      ],
+      ["debug", "debug", "debug"],
+    );
+    assert.notEqual(classifyLogLevel("Cache hit for key xyz"), "info");
   });
 });
 
@@ -301,6 +318,9 @@ describe("integration: handler observability", () => {
 
     handleRequest(logger, false);
 
+    assert.equal(logger.entries.length, 2);
+    assert.equal(logger.entries[0].level, "debug");
+    assert.equal(logger.entries[1].level, "info");
     assertNoLogsAbove(logger, "info");
     assertLogEntry(logger, "info", "Request completed", { duration: 42 });
   });
@@ -312,6 +332,6 @@ describe("integration: handler observability", () => {
     assert.throws(() => handleRequest(logger, true));
 
     assertErrorLogged(logger, "Request failed", { message: "Database unavailable" });
-    assertLogEntry(logger, "error", "Request failed", { component: "Handler" });
+    assertLogEntry(logger, "error", "Request failed", { component: "Handler", path: "/api/test" });
   });
 });

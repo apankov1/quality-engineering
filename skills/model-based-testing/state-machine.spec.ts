@@ -50,6 +50,7 @@ describe("createStateMachine", () => {
 // ============================================================================
 
 describe("canTransition", () => {
+  // slop-ignore: no_negative_test — canTransition is a pure predicate API that returns false for invalid transitions instead of throwing.
   const machine = createStateMachine({
     idle: ["running"],
     running: ["paused", "stopped"],
@@ -393,5 +394,13 @@ describe("integration: workflow state machine", () => {
     // Count valid transitions
     const valid = matrix.filter((e) => e.valid);
     assert.equal(valid.length, 5); // draft->review, review->approved, review->rejected, approved->published, rejected->draft
+  });
+
+  // Defect: invalid workflow jumps must fail loudly in assertion helpers to prevent silent invalid state transitions.
+  it("throws on impossible workflow jump", () => {
+    assert.throws(
+      () => assertTransition(workflow, "draft", "published"),
+      /Invalid transition: draft -> published/,
+    );
   });
 });
