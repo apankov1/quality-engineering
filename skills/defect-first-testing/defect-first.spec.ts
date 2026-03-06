@@ -371,6 +371,7 @@ describe("suggestTests", () => {
   it("covers all defect classes in surface", () => {
     const surface = analyzeFaultSurface("if (i < 10) { items[i] = x; }");
     const suggestions = suggestTests(surface);
+    assert.ok(surface.coverage.length > 0, "Expected non-empty defect coverage");
     const suggestedClasses = new Set<string>();
     for (const s of suggestions) {
       for (const dc of surface.coverage) {
