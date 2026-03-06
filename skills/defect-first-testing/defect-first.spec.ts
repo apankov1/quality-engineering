@@ -447,6 +447,15 @@ describe("validateCoverage", () => {
     assert.equal(result.covered, 0);
   });
 
+  // Defect: generic wording ("error") falsely marks multiple error-path classes covered
+  it("does not overcount generic error wording", () => {
+    const surface = analyzeFaultSurface("try { x(); } catch (e) {}");
+    const testSource = '// Defect: verify error is logged\nit("test", () => {});';
+    const result = validateCoverage(testSource, surface);
+    assert.equal(result.covered, 0);
+    assert.equal(result.gaps.length, surface.coverage.length);
+  });
+
   // Defect: score calculation wrong when no faults exist
   it("returns score 100 for empty surface", () => {
     const surface = analyzeFaultSurface("const x = 1;");
