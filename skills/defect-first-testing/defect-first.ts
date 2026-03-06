@@ -507,14 +507,17 @@ export function suggestTests(surface: FaultSurface): TestSuggestion[] {
 }
 
 function isDefectCovered(dc: DefectClass, comments: string[]): boolean {
-  const dcLower = dc.toLowerCase();
-  const dcSpaced = dcLower.replace(/-/g, " ");
-  const words = dcLower.split("-").filter((w) => w.length > 3);
+  const canonical = dc.toLowerCase();
+  const spaced = canonical.replace(/-/g, " ");
+  const aliases = DEFECT_ALIASES[dc];
+  const tokens = spaced.split(/\s+/).filter((w) => w.length > 2);
 
   return comments.some((comment) => {
-    if (comment.includes(dcLower)) return true;
-    if (comment.includes(dcSpaced)) return true;
-    return words.some((word) => comment.includes(word));
+    const normalized = normalizeCommentText(comment);
+    if (normalized.includes(canonical)) return true;
+    if (normalized.includes(spaced)) return true;
+    if (aliases.some((alias) => normalized.includes(alias))) return true;
+    return tokens.length > 0 && tokens.every((token) => normalized.includes(token));
   });
 }
 
@@ -524,7 +527,7 @@ export function validateCoverage(testSource: string, surface: FaultSurface): Val
   for (const line of testSource.split("\n")) {
     const match = line.match(/\/\/\s*Defect:\s*(.*)/i);
     if (match) {
-      comments.push(match[1].toLowerCase());
+      comments.push(match[1]);
     }
   }
 
