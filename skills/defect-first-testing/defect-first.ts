@@ -206,7 +206,7 @@ const FAULT_DETECTORS: FaultDetector[] = [
   {
     id: "division-op",
     category: "math",
-    match: /\w\s+\/\s+\w/,
+    match: /[A-Za-z0-9_)\]]\s*\/\s*[A-Za-z0-9_(\[]/,
     exclude: /import|from|require/,
     defectClasses: ["division-by-zero", "nan-propagation"],
     description: "Division operation — divisor may be zero or NaN",
