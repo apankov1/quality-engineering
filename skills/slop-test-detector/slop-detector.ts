@@ -1252,7 +1252,9 @@ export function checkSchemaSuccessOnly(block: ParsedTestBlock): SlopFinding | nu
 
   const hasFailGuardOnSuccess = [...safeParseVars].some((resultVar) => {
     const escaped = escapeRegExpLiteral(resultVar);
-    const negativeGuard = new RegExp(`if\\s*\\(\\s*!\\s*${escaped}\\.success\\s*\\)[\\s\\S]{0,300}?assert\\.fail\\s*\\(`);
+    const negativeGuard = new RegExp(
+      `if\\s*\\(\\s*!\\s*${escaped}\\.success\\s*\\)[\\s\\S]{0,300}?assert\\.fail\\s*\\(`,
+    );
     const positiveElseGuard = new RegExp(
       `if\\s*\\(\\s*${escaped}\\.success\\s*\\)[\\s\\S]{0,200}?else\\s*\\{[\\s\\S]{0,300}?assert\\.fail\\s*\\(`,
     );
@@ -1517,12 +1519,15 @@ function splitTopLevelComma(text: string): string[] {
 
 function parseImportBindings(source: string): ImportBinding[] {
   const bindings: ImportBinding[] = [];
-  let match: RegExpExecArray | null;
+  let match: RegExpExecArray | null = IMPORT_STMT_RE.exec(source);
 
-  while ((match = IMPORT_STMT_RE.exec(source)) !== null) {
+  while (match !== null) {
     const clause = match[1].trim();
     const moduleSource = match[2];
-    if (clause.startsWith("type ")) continue;
+    if (clause.startsWith("type ")) {
+      match = IMPORT_STMT_RE.exec(source);
+      continue;
+    }
 
     const parts = splitTopLevelComma(clause);
     for (const part of parts) {
@@ -1552,6 +1557,7 @@ function parseImportBindings(source: string): ImportBinding[] {
         bindings.push({ identifier: defaultMatch[1], source: moduleSource });
       }
     }
+    match = IMPORT_STMT_RE.exec(source);
   }
 
   return bindings;

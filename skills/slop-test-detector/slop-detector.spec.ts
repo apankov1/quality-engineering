@@ -1810,12 +1810,7 @@ describe("parseImports", () => {
 
   // Defect: if parseImports only supports single-line forms, multiline named imports vanish and downstream rules miss production usage.
   it("extracts multiline named imports", () => {
-    const source = [
-      "import {",
-      "  parseConfig,",
-      "  validateConfig as validate,",
-      '} from "./config.ts";',
-    ].join("\n");
+    const source = ["import {", "  parseConfig,", "  validateConfig as validate,", '} from "./config.ts";'].join("\n");
     const imports = parseImports(source);
     assert.deepEqual(imports, ["parseConfig", "validate"]);
   });
