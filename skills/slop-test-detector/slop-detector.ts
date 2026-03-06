@@ -1123,10 +1123,8 @@ export function checkAssertReturnTypeOnly(block: ParsedTestBlock): SlopFinding |
   const argIdent = a.args.trim();
   if (!/^[a-zA-Z_$][a-zA-Z0-9_$.]*$/.test(argIdent)) return null;
 
-  const hasAssignment = block.bodyLines.some((line) => {
-    const t = line.trimStart();
-    return new RegExp(`(?:const|let|var)\\s+${argIdent.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\s*=`).test(t);
-  });
+  const assignmentRe = new RegExp(`(?:const|let|var)\\s+${escapeRegExpLiteral(argIdent)}\\s*=`);
+  const hasAssignment = block.bodyLines.some((line) => assignmentRe.test(line.trimStart()));
 
   if (hasAssignment) {
     return makeFinding(
@@ -1519,6 +1517,7 @@ function splitTopLevelComma(text: string): string[] {
 
 function parseImportBindings(source: string): ImportBinding[] {
   const bindings: ImportBinding[] = [];
+  IMPORT_STMT_RE.lastIndex = 0;
   let match: RegExpExecArray | null = IMPORT_STMT_RE.exec(source);
 
   while (match !== null) {

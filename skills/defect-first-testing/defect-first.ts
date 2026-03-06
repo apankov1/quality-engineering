@@ -121,14 +121,15 @@ function stripLineForAnalysis(line: string, inBlockComment: boolean): { cleaned:
   let cleaned = "";
   let inString: string | null = null;
   let escaped = false;
+  let blockComment = inBlockComment;
 
   for (let i = 0; i < line.length; i++) {
     const ch = line[i];
     const next = line[i + 1] ?? "";
 
-    if (inBlockComment) {
+    if (blockComment) {
       if (ch === "*" && next === "/") {
-        inBlockComment = false;
+        blockComment = false;
         i++;
       }
       continue;
@@ -157,7 +158,7 @@ function stripLineForAnalysis(line: string, inBlockComment: boolean): { cleaned:
     }
 
     if (ch === "/" && next === "*") {
-      inBlockComment = true;
+      blockComment = true;
       i++;
       continue;
     }
@@ -169,7 +170,7 @@ function stripLineForAnalysis(line: string, inBlockComment: boolean): { cleaned:
     cleaned += ch;
   }
 
-  return { cleaned, inBlockComment };
+  return { cleaned, inBlockComment: blockComment };
 }
 
 function normalizeCommentText(text: string): string {
@@ -427,6 +428,7 @@ export const DETECTOR_COUNT = FAULT_DETECTORS.length;
 export function analyzeFaultSurface(source: string): FaultSurface {
   const lines = source.split("\n");
   const entries: FaultEntry[] = [];
+  const reported = new Set<string>();
   let inBlockComment = false;
 
   for (let i = 0; i < lines.length; i++) {
@@ -435,15 +437,16 @@ export function analyzeFaultSurface(source: string): FaultSurface {
     inBlockComment = stripped.inBlockComment;
 
     const cleaned = stripped.cleaned.trim();
-    if (cleaned.trim() === "") continue;
+    if (cleaned === "") continue;
 
     for (const detector of FAULT_DETECTORS) {
       if (!detector.match.test(cleaned)) continue;
       if (detector.exclude?.test(cleaned)) continue;
 
       // Deduplicate: same pattern on same line
-      const alreadyReported = entries.some((e) => e.line === i + 1 && e.pattern === detector.id);
-      if (alreadyReported) continue;
+      const key = `${i + 1}:${detector.id}`;
+      if (reported.has(key)) continue;
+      reported.add(key);
 
       entries.push({
         line: i + 1,
@@ -506,14 +509,13 @@ export function suggestTests(surface: FaultSurface): TestSuggestion[] {
   return suggestions;
 }
 
-function isDefectCovered(dc: DefectClass, comments: string[]): boolean {
+function isDefectCovered(dc: DefectClass, normalizedComments: string[]): boolean {
   const canonical = dc.toLowerCase();
   const spaced = canonical.replace(/-/g, " ");
   const aliases = DEFECT_ALIASES[dc];
   const tokens = spaced.split(/\s+/).filter((w) => w.length > 2);
 
-  return comments.some((comment) => {
-    const normalized = normalizeCommentText(comment);
+  return normalizedComments.some((normalized) => {
     if (normalized.includes(canonical)) return true;
     if (normalized.includes(spaced)) return true;
     if (aliases.some((alias) => normalized.includes(alias))) return true;
@@ -522,12 +524,12 @@ function isDefectCovered(dc: DefectClass, comments: string[]): boolean {
 }
 
 export function validateCoverage(testSource: string, surface: FaultSurface): ValidationResult {
-  // Extract defect comments from test source
-  const comments: string[] = [];
+  // Extract and pre-normalize defect comments from test source
+  const normalizedComments: string[] = [];
   for (const line of testSource.split("\n")) {
     const match = line.match(/\/\/\s*Defect:\s*(.*)/i);
     if (match) {
-      comments.push(match[1]);
+      normalizedComments.push(normalizeCommentText(match[1]));
     }
   }
 
@@ -536,7 +538,7 @@ export function validateCoverage(testSource: string, surface: FaultSurface): Val
   const total = surface.coverage.length;
 
   for (const dc of surface.coverage) {
-    if (isDefectCovered(dc, comments)) {
+    if (isDefectCovered(dc, normalizedComments)) {
       covered++;
     } else {
       const entry = surface.entries.find((e) => e.defectClasses.includes(dc));
