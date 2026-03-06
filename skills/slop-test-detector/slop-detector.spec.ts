@@ -1412,6 +1412,24 @@ describe("checkSchemaSuccessOnly", () => {
     assert.equal(checkSchemaSuccessOnly(allTests[0]), null);
   });
 
+  // Defect: if schema_success_only ignores explicit fail-guards on !result.success, matrix tests that enforce success via assert.fail(...) get false positives.
+  it("does not fire when !result.success branch immediately fails", () => {
+    const source = [
+      'describe("X", () => {',
+      '  it("guards success via fail", () => {',
+      "    const result = schema.safeParse(data);",
+      "    if (!result.success) {",
+      '      assert.fail("unexpected parse failure");',
+      "    }",
+      "    assert.equal(count, 1);",
+      "  });",
+      "});",
+    ].join("\n");
+
+    const { allTests } = parseTestFile(source);
+    assert.equal(checkSchemaSuccessOnly(allTests[0]), null);
+  });
+
   // Defect: if schema_success_only fires on non-safeParse tests, it false-positives on tests that happen to check a .success property unrelated to Zod.
   it("does not fire on tests without safeParse", () => {
     const source = [
@@ -1455,7 +1473,8 @@ describe("checkSchemaSuccessOnly", () => {
 
     const { allTests } = parseTestFile(source);
     const finding = checkSchemaSuccessOnly(allTests[0]);
-    assert.ok(finding);
+    assert.notEqual(finding, null);
+    assert.equal(finding?.rule, "schema_success_only");
   });
 });
 
@@ -1684,6 +1703,55 @@ describe("checkNoProductionCall", () => {
     assert.equal(finding?.rule, "no_production_call");
   });
 
+  // Defect: if no_production_call treats node builtins as production imports, tests importing fs/path for fixtures are falsely flagged.
+  it("does not fire when only node builtins are imported", () => {
+    const source = [
+      'import { readFileSync } from "node:fs";',
+      'describe("X", () => {',
+      '  it("does arithmetic only", () => {',
+      "    const value = 1 + 2;",
+      "    assert.equal(value, 3);",
+      "  });",
+      "});",
+    ].join("\n");
+
+    const report = analyzeTestFile(source, "test.ts", {
+      ...getPreset("balanced"),
+      enabledRules: new Set(["no_production_call"]),
+    });
+    assert.equal(
+      report.findings.some((f) => f.rule === "no_production_call"),
+      false,
+      "Node builtins should be excluded from production import tracking",
+    );
+  });
+
+  // Defect: if parseImports fails on multiline imports, no_production_call false-positives even when production code is called.
+  it("does not fire when multiline production import is called", () => {
+    const source = [
+      'import helper from "node:path";',
+      "import {",
+      "  computeScore,",
+      '} from "./scoring.ts";',
+      'describe("X", () => {',
+      '  it("uses production code", () => {',
+      "    const result = computeScore(10, 20);",
+      "    assert.equal(result, 30);",
+      "  });",
+      "});",
+    ].join("\n");
+
+    const report = analyzeTestFile(source, "test.ts", {
+      ...getPreset("balanced"),
+      enabledRules: new Set(["no_production_call"]),
+    });
+    assert.equal(
+      report.findings.some((f) => f.rule === "no_production_call"),
+      false,
+      "Called multiline production import should satisfy no_production_call",
+    );
+  });
+
   // Defect: if no_production_call fires when there are no imports, every test in standalone files gets flagged.
   it("does not fire when there are no production imports", () => {
     const block = makeTestBlock({
@@ -1738,6 +1806,25 @@ describe("parseImports", () => {
     const source = 'import * as utils from "./utils.ts";';
     const imports = parseImports(source);
     assert.deepEqual(imports, ["utils"]);
+  });
+
+  // Defect: if parseImports only supports single-line forms, multiline named imports vanish and downstream rules miss production usage.
+  it("extracts multiline named imports", () => {
+    const source = [
+      "import {",
+      "  parseConfig,",
+      "  validateConfig as validate,",
+      '} from "./config.ts";',
+    ].join("\n");
+    const imports = parseImports(source);
+    assert.deepEqual(imports, ["parseConfig", "validate"]);
+  });
+
+  // Defect: if parseImports misses mixed default + named imports, rules like no_production_call cannot track common import syntax.
+  it("extracts mixed default and named imports", () => {
+    const source = 'import worker, { runJob as run } from "./worker.ts";';
+    const imports = parseImports(source);
+    assert.deepEqual(imports, ["worker", "run"]);
   });
 });
 
@@ -2367,10 +2454,16 @@ describe("zero must-fail on existing spec files", () => {
       const source = readFileSync(fullPath, "utf-8");
       const report = analyzeTestFile(source, file, repoConfig);
       const mustFails = report.findings.filter((f) => f.severity === "must-fail");
+      const shouldFails = report.findings.filter((f) => f.severity === "should-fail");
       assert.equal(
         mustFails.length,
         0,
         `Found must-fail in ${file}:\n${mustFails.map((f) => `  ${f.rule} at line ${f.line}: ${f.message}`).join("\n")}`,
+      );
+      assert.equal(
+        shouldFails.length,
+        0,
+        `Found should-fail in ${file}:\n${shouldFails.map((f) => `  ${f.rule} at line ${f.line}: ${f.message}`).join("\n")}`,
       );
     });
   }

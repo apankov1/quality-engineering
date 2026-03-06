@@ -1,7 +1,7 @@
 /**
  * Slop Test Detector
  *
- * Static analyzer for test quality. Detects 15 slop patterns in test code
+ * Static analyzer for test quality. Detects 18 slop patterns in test code
  * that compile and pass but catch zero bugs.
  *
  * Zero dependencies — uses only Node.js built-ins.
@@ -10,6 +10,8 @@
  * - Agents: analyzeTestFile() or validateTestBlock() during generation
  * - Humans: formatReport(analyzeTestFile(source)) for CLI audit
  */
+
+import { builtinModules } from "node:module";
 
 // ============================================================================
 // TYPES
@@ -370,6 +372,17 @@ function scanCode(opts: ScanOptions): LexState {
     }
   }
   return state;
+}
+
+function extractCodeOnly(text: string): string {
+  let code = "";
+  scanCode({
+    text,
+    onCode(ch) {
+      code += ch;
+    },
+  });
+  return code;
 }
 
 function computeBraceDelta(line: string, startsInBlockComment = false): { delta: number; endsInBlockComment: boolean } {
@@ -1214,6 +1227,16 @@ export function checkSchemaSuccessOnly(block: ParsedTestBlock): SlopFinding | nu
   // Check if test body contains .safeParse( or .safeParseAsync(
   const hasSafeParse = block.bodyLines.some((line) => /\.safeParse(?:Async)?\s*\(/.test(line));
   if (!hasSafeParse) return null;
+  const bodyText = block.bodyLines.join("\n");
+
+  // Track variables bound to safeParse/safeParseAsync results.
+  // This allows detection of meaningful branch guards such as:
+  // if (!result.success) assert.fail(...)
+  const safeParseVars = new Set<string>();
+  for (const line of block.bodyLines) {
+    const match = line.match(/\b(?:const|let|var)\s+([A-Za-z_$][\w$]*)\s*=\s*.*\.safeParse(?:Async)?\s*\(/);
+    if (match) safeParseVars.add(match[1]);
+  }
 
   // Check if any assertion verifies .data or .error.issues content
   const hasDataOrErrorCheck = active.some((a) => {
@@ -1226,6 +1249,16 @@ export function checkSchemaSuccessOnly(block: ParsedTestBlock): SlopFinding | nu
     );
   });
   if (hasDataOrErrorCheck) return null;
+
+  const hasFailGuardOnSuccess = [...safeParseVars].some((resultVar) => {
+    const escaped = escapeRegExpLiteral(resultVar);
+    const negativeGuard = new RegExp(`if\\s*\\(\\s*!\\s*${escaped}\\.success\\s*\\)[\\s\\S]{0,300}?assert\\.fail\\s*\\(`);
+    const positiveElseGuard = new RegExp(
+      `if\\s*\\(\\s*${escaped}\\.success\\s*\\)[\\s\\S]{0,200}?else\\s*\\{[\\s\\S]{0,300}?assert\\.fail\\s*\\(`,
+    );
+    return negativeGuard.test(bodyText) || positiveElseGuard.test(bodyText);
+  });
+  if (hasFailGuardOnSuccess) return null;
 
   // Check that there IS a .success assertion (to confirm this is a safeParse test pattern)
   const hasSuccessCheck = active.some((a) => /\.success/.test(a.args));
@@ -1299,22 +1332,24 @@ export function checkConditionalAssertion(block: ParsedTestBlock): SlopFinding |
 // ============================================================================
 
 export function checkVacuousProperty(block: ParsedTestBlock): SlopFinding | null {
+  const codeLines = block.bodyLines.map((line) => extractCodeOnly(line));
+
   // Only applies to tests using fast-check's fc.property
-  const hasFcProperty = block.bodyLines.some((line) => /\bfc\.property\s*\(/.test(line));
+  const hasFcProperty = codeLines.some((line) => /\bfc\.property\s*\(/.test(line));
   if (!hasFcProperty) return null;
 
   // Sub-pattern 2b: all generators are fc.constant(...) → zero variation
   // Find the fc.property( call and check if all generator args before the callback are fc.constant
-  for (const line of block.bodyLines) {
+  for (const line of codeLines) {
     const trimmed = line.trimStart();
     const propMatch = trimmed.match(/\bfc\.property\s*\(\s*fc\.constant\s*\(/);
     if (propMatch) {
       // Check if ALL generators in this property call are fc.constant
       // Scan the bodyLines for the fc.property call and its arguments
-      const allFcConstant = block.bodyLines.every((l) => {
-        const t = l.trimStart();
+      const allFcConstant = codeLines.every((lineText) => {
+        const t = lineText.trimStart();
         // Lines with generator args (before the callback) should all be fc.constant
-        if (/^\s*fc\.\w+\s*\(/.test(l) && !/\bfc\.property\s*\(/.test(l) && !/\bfc\.assert\s*\(/.test(l)) {
+        if (/^\s*fc\.\w+\s*\(/.test(t) && !/\bfc\.property\s*\(/.test(t) && !/\bfc\.assert\s*\(/.test(t)) {
           return /\bfc\.constant\s*\(/.test(t);
         }
         return true;
@@ -1345,8 +1380,8 @@ export function checkVacuousProperty(block: ParsedTestBlock): SlopFinding | null
 
   // Find return true statements and check if any are at a depth where no assertion exists at the same depth
   const returnTrueLines: number[] = [];
-  for (let i = 0; i < block.bodyLines.length; i++) {
-    const trimmed = block.bodyLines[i].trimStart();
+  for (let i = 0; i < codeLines.length; i++) {
+    const trimmed = codeLines[i].trimStart();
     if (/^return\s+true\s*;?\s*$/.test(trimmed)) {
       returnTrueLines.push(i);
     }
@@ -1405,38 +1440,141 @@ const TEST_FRAMEWORK_IDENTS = new Set([
   "bench",
 ]);
 
-export function parseImports(source: string): string[] {
-  const identifiers: string[] = [];
-  for (const line of source.split("\n")) {
-    const trimmed = line.trimStart();
-    // import { a, b as c } from '...'
-    const namedMatch = trimmed.match(/^import\s*(?:type\s+)?\{([^}]+)\}\s*from\s/);
-    if (namedMatch) {
-      // Skip type-only imports
-      if (/^import\s+type\s/.test(trimmed)) continue;
-      const names = namedMatch[1]
-        .split(",")
-        .map((s) => {
-          const parts = s.trim().split(/\s+as\s+/);
-          return (parts[1] || parts[0]).trim();
-        })
-        .filter((s) => s.length > 0);
-      identifiers.push(...names);
+interface ImportBinding {
+  identifier: string;
+  source: string;
+}
+
+const IMPORT_STMT_RE = /^\s*import\s+([\s\S]*?)\s+from\s+["']([^"']+)["']\s*;?/gm;
+const TEST_FRAMEWORK_MODULES = new Set([
+  "node:assert",
+  "node:assert/strict",
+  "node:test",
+  "vitest",
+  "@jest/globals",
+  "jest",
+  "chai",
+  "fast-check",
+  "bun:test",
+  "uvu",
+  "tap",
+]);
+const NODE_BUILTIN_MODULES = new Set(
+  builtinModules.flatMap((m) => (m.startsWith("node:") ? [m, m.slice(5)] : [m, `node:${m}`])),
+);
+
+function escapeRegExpLiteral(text: string): string {
+  return text.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+function splitTopLevelComma(text: string): string[] {
+  const parts: string[] = [];
+  let start = 0;
+  let braceDepth = 0;
+  let inString: "'" | '"' | "`" | null = null;
+  let escaped = false;
+
+  for (let i = 0; i < text.length; i++) {
+    const ch = text[i];
+    if (inString !== null) {
+      if (escaped) {
+        escaped = false;
+        continue;
+      }
+      if (ch === "\\") {
+        escaped = true;
+        continue;
+      }
+      if (ch === inString) {
+        inString = null;
+      }
       continue;
     }
-    // import X from '...'
-    const defaultMatch = trimmed.match(/^import\s+([a-zA-Z_$][\w$]*)\s+from\s/);
-    if (defaultMatch) {
-      identifiers.push(defaultMatch[1]);
+
+    if (ch === "'" || ch === '"' || ch === "`") {
+      inString = ch;
       continue;
     }
-    // import * as X from '...'
-    const starMatch = trimmed.match(/^import\s*\*\s*as\s+([a-zA-Z_$][\w$]*)\s+from\s/);
-    if (starMatch) {
-      identifiers.push(starMatch[1]);
+    if (ch === "{") {
+      braceDepth++;
+      continue;
+    }
+    if (ch === "}" && braceDepth > 0) {
+      braceDepth--;
+      continue;
+    }
+    if (ch === "," && braceDepth === 0) {
+      const part = text.slice(start, i).trim();
+      if (part.length > 0) parts.push(part);
+      start = i + 1;
     }
   }
-  return identifiers;
+
+  const tail = text.slice(start).trim();
+  if (tail.length > 0) parts.push(tail);
+  return parts;
+}
+
+function parseImportBindings(source: string): ImportBinding[] {
+  const bindings: ImportBinding[] = [];
+  let match: RegExpExecArray | null;
+
+  while ((match = IMPORT_STMT_RE.exec(source)) !== null) {
+    const clause = match[1].trim();
+    const moduleSource = match[2];
+    if (clause.startsWith("type ")) continue;
+
+    const parts = splitTopLevelComma(clause);
+    for (const part of parts) {
+      if (part.startsWith("{")) {
+        const inner = part.replace(/^\{\s*|\s*\}$/g, "");
+        for (const spec of inner.split(",")) {
+          let token = spec.trim();
+          if (token.length === 0) continue;
+          if (token.startsWith("type ")) token = token.slice(5).trimStart();
+          const namedMatch = token.match(/^([A-Za-z_$][\w$]*)(?:\s+as\s+([A-Za-z_$][\w$]*))?$/);
+          if (!namedMatch) continue;
+          bindings.push({ identifier: namedMatch[2] ?? namedMatch[1], source: moduleSource });
+        }
+        continue;
+      }
+
+      const nsMatch = part.match(/^\*\s+as\s+([A-Za-z_$][\w$]*)$/);
+      if (nsMatch) {
+        bindings.push({ identifier: nsMatch[1], source: moduleSource });
+        continue;
+      }
+
+      let defaultPart = part;
+      if (defaultPart.startsWith("type ")) defaultPart = defaultPart.slice(5).trimStart();
+      const defaultMatch = defaultPart.match(/^([A-Za-z_$][\w$]*)$/);
+      if (defaultMatch) {
+        bindings.push({ identifier: defaultMatch[1], source: moduleSource });
+      }
+    }
+  }
+
+  return bindings;
+}
+
+function isNodeBuiltinModule(source: string): boolean {
+  if (NODE_BUILTIN_MODULES.has(source)) return true;
+  const normalized = source.startsWith("node:") ? source.slice(5) : source;
+  if (NODE_BUILTIN_MODULES.has(normalized) || NODE_BUILTIN_MODULES.has(`node:${normalized}`)) return true;
+  const root = normalized.split("/")[0];
+  return NODE_BUILTIN_MODULES.has(root) || NODE_BUILTIN_MODULES.has(`node:${root}`);
+}
+
+function isNonProductionImportSource(source: string): boolean {
+  if (isNodeBuiltinModule(source)) return true;
+  for (const moduleName of TEST_FRAMEWORK_MODULES) {
+    if (source === moduleName || source.startsWith(`${moduleName}/`)) return true;
+  }
+  return false;
+}
+
+export function parseImports(source: string): string[] {
+  return parseImportBindings(source).map((b) => b.identifier);
 }
 
 export function checkNoProductionCall(block: ParsedTestBlock, productionImports: string[]): SlopFinding | null {
@@ -1447,7 +1585,7 @@ export function checkNoProductionCall(block: ParsedTestBlock, productionImports:
 
   for (const ident of productionImports) {
     // Check if the identifier appears as a function call or constructor (new Ident) or property access (ident.method)
-    const re = new RegExp(`\\b${ident.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\b`);
+    const re = new RegExp(`\\b${escapeRegExpLiteral(ident)}\\b`);
     if (!re.test(bodyText)) continue;
 
     // Verify it's actually used in code (not just in a string or comment)
@@ -1504,7 +1642,7 @@ export function checkImpossibleAssertion(block: ParsedTestBlock): SlopFinding[] 
   const findings: SlopFinding[] = [];
 
   for (let i = 0; i < block.bodyLines.length; i++) {
-    const trimmed = block.bodyLines[i].trimStart();
+    const trimmed = extractCodeOnly(block.bodyLines[i]).trimStart();
     if (trimmed.startsWith("//")) continue;
 
     // Check for .length combined with impossible comparison
@@ -1742,7 +1880,14 @@ export function analyzeTestFile(
 
   // Parse imports once for no_production_call rule
   const productionImports = config.enabledRules.has("no_production_call")
-    ? parseImports(source).filter((id) => !TEST_FRAMEWORK_IDENTS.has(id))
+    ? [
+        ...new Set(
+          parseImportBindings(source)
+            .filter((binding) => !TEST_FRAMEWORK_IDENTS.has(binding.identifier))
+            .filter((binding) => !isNonProductionImportSource(binding.source))
+            .map((binding) => binding.identifier),
+        ),
+      ]
     : [];
 
   for (const test of allTests) {
