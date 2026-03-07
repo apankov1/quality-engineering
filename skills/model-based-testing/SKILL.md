@@ -174,6 +174,62 @@ assert.deepEqual(terminals, ['published']);
 
 ---
 
+## Event Replay Testing (Given-When-Then)
+
+For event-sourced aggregates, state machines are driven by event replay. The Given-When-Then pattern tests the full cycle:
+
+```
+Given: [list of historical events]  → establishes state
+When:  [command]                     → triggers decision
+Then:  [list of new events]          → asserts outcome
+```
+
+### Pattern
+
+```typescript
+describe('Game aggregate', () => {
+  function givenEvents(events: GameEvent[]): GameState {
+    return events.reduce(evolve, initialState);
+  }
+
+  it('rejects move on completed game', () => {
+    // Given: game completed
+    const state = givenEvents([
+      { type: 'game_started', payload: { players: ['p1', 'p2'] } },
+      { type: 'move_executed', payload: { player: 'p1', row: 0, col: 0 } },
+      { type: 'game_won', payload: { winner: 'p1' } },
+    ]);
+
+    // When: another move attempted
+    // Then: should throw
+    expect(() => decide(state, { type: 'MAKE_MOVE', player: 'p2', row: 1, col: 1 }))
+      .toThrow('Game is already completed');
+  });
+
+  it('produces correct events for valid move', () => {
+    // Given: game in progress
+    const state = givenEvents([
+      { type: 'game_started', payload: { players: ['p1', 'p2'] } },
+    ]);
+
+    // When: valid move
+    const newEvents = decide(state, { type: 'MAKE_MOVE', player: 'p1', row: 0, col: 0 });
+
+    // Then: move event produced
+    expect(newEvents).toEqual([
+      { type: 'move_executed', payload: { player: 'p1', row: 0, col: 0 } },
+    ]);
+  });
+});
+```
+
+### Why This Matters
+
+- **Decoupled from persistence**: Tests don't need databases, storage, or mocks
+- **Replay safety**: Proves that historical events produce correct state
+- **Schema evolution**: Add upcasted events to `Given` to verify migration
+- **Deterministic**: Pure functions — no async, no side effects
+
 ## Violation Rules
 
 ### missing_transition_coverage
@@ -190,6 +246,14 @@ Transitions that modify context MUST have assertions verifying exact changes and
 
 ### untested_terminal_state
 Terminal states (no outgoing transitions) MUST be explicitly identified and tested.
+**Severity**: should-fail
+
+### missing_event_replay_test
+Event-sourced aggregates MUST have tests that replay historical events and verify resulting state. Without replay tests, schema evolution and upcasters can silently corrupt state.
+**Severity**: must-fail
+
+### missing_given_when_then_coverage
+Event-sourced command handlers MUST have Given-When-Then tests covering: (1) valid commands producing correct events, (2) invalid commands on valid state, (3) valid commands on invalid/terminal state.
 **Severity**: should-fail
 
 ---
@@ -213,5 +277,6 @@ This skill provides **testing utilities** for state machines, not state machine 
 | Guard truth table | Boolean guard functions | 2^N rows for N boolean inputs |
 | Context mutation | Transitions with side effects | `assertContextMutation(before, after, expected)` |
 | Terminal states | Lifecycle endpoints | `getTerminalStates(machine)` |
+| Given-When-Then | Event-sourced aggregates | `givenEvents([...]) → decide(state, cmd) → assertEvents(result)` |
 
 See [patterns.md](./references/patterns.md) for XState integration, complex guard examples, and hibernation safety testing.

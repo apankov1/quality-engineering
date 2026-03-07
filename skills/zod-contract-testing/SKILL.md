@@ -245,6 +245,14 @@ Zod parsing MUST happen at system boundaries (API handlers, WebSocket messages, 
 Use `Schema.parse()` or `Schema.safeParse()`, NEVER `as Type` casts for external data.
 **Severity**: must-fail
 
+### missing_schema_version_test
+Event schemas with `schemaVersion` field MUST have contract tests verifying that each version parses correctly and upcasters produce valid output for the target version.
+**Severity**: must-fail
+
+### missing_boundary_contract_test
+Typed RPC interfaces used for cross-service or cross-DO communication MUST have contract tests verifying request/response schemas parse correctly at both caller and callee boundaries.
+**Severity**: should-fail
+
 ---
 
 ## Companion Skills
