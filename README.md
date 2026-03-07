@@ -1,8 +1,8 @@
 # Quality Engineering Skills for AI Coding Agents
 
 [![CI](https://github.com/apankov1/quality-engineering/actions/workflows/ci.yml/badge.svg)](https://github.com/apankov1/quality-engineering/actions/workflows/ci.yml)
-[![Skills](https://img.shields.io/badge/skills-8-blue)](skills/)
-[![Tests](https://img.shields.io/badge/tests-174-brightgreen)](skills/)
+[![Skills](https://img.shields.io/badge/skills-10-blue)](skills/)
+[![Tests](https://img.shields.io/badge/tests-436-brightgreen)](skills/)
 [![Node](https://img.shields.io/badge/node-%E2%89%A520-339933?logo=node.js&logoColor=white)](https://nodejs.org)
 [![License: MIT](https://img.shields.io/badge/license-MIT-yellow)](LICENSE)
 
@@ -22,6 +22,8 @@ These skills teach AI coding agents (Claude Code, Cursor, etc.) rigorous testing
 | **pairwise-test-coverage** | Combinatorial testing with matrix generator | Zero-dep greedy algorithm covers all factor pairs in near-minimal test cases |
 | **websocket-client-resilience** | Client-side WebSocket resilience patterns | Mobile-aware timeouts, circuit breakers, heartbeat hysteresis |
 | **zod-contract-testing** | Schema boundary testing with compound state matrices | 2^N optional field coverage, refinement assertions, schema evolution |
+| **defect-first-testing** | Reverses the test-writing workflow: analyze fault surface first, then write tests | 16-pattern fault surface analyzer with defect class suggestions and coverage validation |
+| **slop-test-detector** | Detects 18 patterns in test code that compile and pass but catch zero bugs | Preset configuration (balanced/strict/advisory), suppression comments, CI score gating |
 
 ## Quickstart for QA Reviewers
 
@@ -39,26 +41,32 @@ node --experimental-strip-types --test skills/*/*.spec.ts
 # Barrier concurrency: 7 tests for deterministic race condition patterns
 node --experimental-strip-types --test skills/barrier-concurrency-testing/test-fixtures.spec.ts
 
-# Breaking change detector: 37 tests for field classification, deserializer safety, schema validation, event type changes
+# Breaking change detector: 33 tests for field classification, deserializer safety, schema validation, event type changes
 node --experimental-strip-types --test skills/breaking-change-detector/breaking-change.spec.ts
 
 # Fault injection: 38 tests for circuit breaker, retry policy, queue preservation, and config validation
 node --experimental-strip-types --test skills/fault-injection-testing/fault-injection.spec.ts
 
-# Model-based testing: 31 tests for state machines, guard truth tables, context mutations
+# Model-based testing: 32 tests for state machines, guard truth tables, context mutations
 node --experimental-strip-types --test skills/model-based-testing/state-machine.spec.ts
 
 # Observability testing: 27 tests for mock logger, log assertions, level classification
 node --experimental-strip-types --test skills/observability-testing/structured-logger.spec.ts
 
-# Pairwise coverage: 13 tests including safety rails and edge cases
+# Pairwise coverage: 18 tests including safety rails and edge cases
 node --experimental-strip-types --test skills/pairwise-test-coverage/pairwise.spec.ts
 
-# WebSocket resilience: 27 tests for backoff, circuit breaker, heartbeat, command ack, gaps, timeouts
+# WebSocket resilience: 31 tests for backoff, circuit breaker, heartbeat, command ack, gaps, timeouts
 node --experimental-strip-types --test skills/websocket-client-resilience/resilience.spec.ts
 
-# Zod contract testing: 24 tests for schema boundary validation, compound state matrices
+# Zod contract testing: 31 tests for schema boundary validation, compound state matrices
 node --experimental-strip-types --test skills/zod-contract-testing/schema-boundary.spec.ts
+
+# Defect-first testing: 62 tests for fault surface analysis, test suggestions, coverage validation
+node --experimental-strip-types --test skills/defect-first-testing/defect-first.spec.ts
+
+# Slop test detector: 157 tests covering 18 slop patterns across node:assert, vitest/Jest, chai
+node --experimental-strip-types --test skills/slop-test-detector/slop-detector.spec.ts
 ```
 
 Each skill ships importable utilities alongside its tests. Import what you need:
@@ -72,6 +80,8 @@ import { CircuitBreaker, RetryPolicy, createFaultInjector } from './skills/fault
 import { createStateMachine, testTransitionMatrix, assertGuardTruthTable } from './skills/model-based-testing/state-machine.ts';
 import { createMockLogger, assertLogEntry, assertNoLogsAbove } from './skills/observability-testing/structured-logger.ts';
 import { testValidInput, testInvalidInput, generateCompoundStateMatrix } from './skills/zod-contract-testing/schema-boundary.ts';
+import { analyzeFaultSurface, suggestTests, validateCoverage } from './skills/defect-first-testing/defect-first.ts';
+import { analyzeTestFile, validateTestBlock, formatReport } from './skills/slop-test-detector/slop-detector.ts';
 ```
 
 **Node.js 18-20 (LTS)?** Replace `node --experimental-strip-types` with `npx tsx`:
@@ -171,6 +181,27 @@ Tests Zod schemas at system boundaries -- not just happy-path inputs. Compound s
 - Refinement coverage (both passing and failing cases)
 - Violation rules: `missing_invalid_input_test`, `missing_refinement_coverage`, `missing_compound_state_test`, `schema_not_at_boundary`, `type_assertion_instead_of_parse`
 
+### defect-first-testing
+
+Reverses the test-writing workflow. Instead of asking "what does this function do?", ask "what bugs could exist here?" Ships a fault surface analyzer that scans production code for 16 fault-prone patterns and generates concrete test suggestions.
+
+- **`defect-first.ts`** -- Fault surface analyzer, test suggestion generator, coverage validator
+- 16 code patterns mapped to defect classes: off-by-one, null dereference, missing error path, type coercion, division-by-zero, shared mutation, unhandled rejection, and more
+- `analyzeFaultSurface()` → `suggestTests()` → `validateCoverage()` workflow
+- Every suggestion includes a `// Defect:` comment template naming the specific production bug
+- Violation rules: tests written without fault surface analysis, missing defect hypothesis, type/truthiness-only assertions, uncovered defect classes
+
+### slop-test-detector
+
+Detects tests that compile, pass, and increase coverage but catch zero bugs. Runs as a static analyzer against any test file and produces a quality score.
+
+- **`slop-detector.ts`** -- Test file analyzer, block validator, report formatter, preset configuration
+- 18 slop rules across must-fail and should-fail severities (tautological assertions, empty test bodies, self-referential checks, conditional assertions, vacuous property tests, and more)
+- Recognizes `node:assert`, vitest/Jest `expect()`, and chai `expect()` -- including multiline chains and `.not` modifiers
+- Three built-in presets: `balanced` (16 rules, default), `strict` (all 18), `advisory` (report-only)
+- Suppression comments with required reason: `// slop-ignore: rule — reason`
+- CI score gating via configurable `scoreThreshold`
+
 ## Try It
 
 Run the test suites with Node.js 22+ (no install needed):
@@ -213,6 +244,8 @@ Start with the change you're making. Each skill targets a different failure mode
 | Error paths, retry logic, circuit breakers | fault-injection-testing | Verify resilience under simulated failures |
 | Structured logging, error context, alert levels | observability-testing | Assert log output as first-class behavior |
 | Zod schemas at system boundaries | zod-contract-testing | Test rejection of invalid data, not just acceptance |
+| Writing tests for any function or module | defect-first-testing | Start from fault surface analysis, not API surface |
+| Auditing or generating test files | slop-test-detector | Catch tests that pass but catch zero bugs before they land |
 
 ## Defect Classes
 
@@ -226,16 +259,20 @@ Start with the change you're making. Each skill targets a different failure mode
 | pairwise-test-coverage | Interaction bugs in untested parameter combinations | Auth=expired + role=admin works, but auth=expired + role=guest crashes |
 | websocket-client-resilience | Reconnection storms, false disconnects, lost messages | All clients retry at once after outage (thundering herd) |
 | zod-contract-testing | Schema accepts invalid data, rejects valid data | Optional field combination triggers refinement bug, old data rejected |
+| defect-first-testing | Tests that miss real defects due to happy-path-only thinking | Off-by-one at last element untested because tests mirror the implementation |
+| slop-test-detector | Tests that compile and pass but are incapable of catching bugs | `assert.equal(result, result)` always passes; `assert.ok(true)` never fails |
 
 ## Workflow Integration
 
 ```
 Design         → pairwise-test-coverage (define factor matrix for new feature)
                → model-based-testing (define state machine transitions)
-Implementation → barrier-concurrency-testing (test concurrent paths as you write them)
+Implementation → defect-first-testing (analyze fault surface before writing tests)
+               → barrier-concurrency-testing (test concurrent paths as you write them)
                → observability-testing (verify logging as you add error paths)
                → fault-injection-testing (test resilience of new integrations)
-Pre-merge      → breaking-change-detector (audit contract/schema diffs)
+Pre-merge      → slop-test-detector (audit all test files for patterns that catch zero bugs)
+               → breaking-change-detector (audit contract/schema diffs)
                → zod-contract-testing (verify boundary schemas)
 Client deploy  → websocket-client-resilience (verify reconnection patterns)
 ```
@@ -247,6 +284,7 @@ When reviewing a pull request, walk the diff and select skills based on what cha
 1. **Scan the diff** -- `git diff --name-only base...HEAD`
 2. **Match files to skills**:
    - Contract/schema/migration files → run **breaking-change-detector** + **zod-contract-testing**
+   - New or modified test files → run **slop-test-detector** + **defect-first-testing**
    - Concurrent or stateful code → run **barrier-concurrency-testing**
    - Multi-factor config or mode logic → run **pairwise-test-coverage**
    - WebSocket client code → run **websocket-client-resilience**
@@ -326,6 +364,7 @@ These skills cover correctness and compatibility, not performance benchmarking o
 | **Resilience under degraded networks** | websocket-client-resilience | Circuit breakers, backoff with jitter, mobile-aware timeouts |
 | **Concurrency under contention** | barrier-concurrency-testing | Deterministic interleaving for write ordering and stale-read detection |
 | **Contract safety** | zod-contract-testing | Boundary validation, compound state matrices, schema evolution |
+| **Test quality** | slop-test-detector + defect-first-testing | Detect zero-value tests, enforce defect-first workflow, gate CI on score |
 
 **Not covered**: load/stress testing, latency percentile benchmarks, throughput profiling, SLO threshold validation, large-scale chaos engineering. These require runtime infrastructure (load generators, APM tooling, distributed tracing) that is outside the scope of static analysis skills.
 
