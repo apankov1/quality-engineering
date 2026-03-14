@@ -6,3 +6,4 @@ node_modules/
 .claude/
 .continue/
 skills-lock.json
+skills/*/benchmarks/

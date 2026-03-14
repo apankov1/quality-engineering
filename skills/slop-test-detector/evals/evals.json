@@ -1,20 +1,20 @@
 {
   "skill_name": "slop-test-detector",
   "benchmark_question": "Does slop-test-detector make the model better at reviewing test files for weak tests than baseline?",
+  "prompt_design": "All evals use the same neutral prompt for both with_skill and without_skill conditions. The only variable is whether the skill is available in the execution context (project directory with skills installed vs clean temp directory).",
   "evals": [
     {
       "id": 1,
       "name": "empty-and-commented",
-      "prompt": "Review this test file for weak test patterns. Use the slop-test-detector to analyze it. Report all findings with rule names, line numbers, severity, and explain the impact of each issue.",
+      "prompt": "Review this test file for weak test patterns and quality issues. For each issue found, report: the pattern name, the test name, the line number, the severity (must-fail vs should-fail), and explain the impact. If the file is clean, say so.",
       "files": ["evals/fixtures/empty-and-commented.spec.ts"],
       "expected_output": "Detects empty_test_body and commented_out_assertions as must-fail, plus no_production_call",
       "expectations": [
-        "Identifies 'empty_test_body' on 'should process refund for valid transaction'",
-        "Identifies 'empty_test_body' on 'should validate card number format before charging'",
-        "Identifies 'commented_out_assertions' on 'should validate card number format before charging'",
-        "Classifies empty_test_body as must-fail severity",
-        "Classifies commented_out_assertions as must-fail severity",
-        "Identifies 'no_production_call' on 'should log transaction with correlation ID'",
+        "Identifies empty test body on 'should process refund for valid transaction'",
+        "Identifies empty test body on 'should validate card number format before charging'",
+        "Identifies commented-out assertions on 'should validate card number format before charging'",
+        "Classifies empty test body and commented-out assertions as must-fail severity",
+        "Identifies that 'should log transaction' tests no production code",
         "Does NOT flag 'should reject expired cards' — it has proper assertions and throws",
         "Explains that empty test bodies pass regardless of behavior",
         "Provides line numbers for each finding"
@@ -30,19 +30,18 @@
     {
       "id": 2,
       "name": "tautological-circus",
-      "prompt": "Review this test file for weak test patterns. Use the slop-test-detector to analyze it. Report all findings with rule names, line numbers, severity, and explain the impact of each issue.",
+      "prompt": "Review this test file for weak test patterns and quality issues. For each issue found, report: the pattern name, the test name, the line number, the severity (must-fail vs should-fail), and explain the impact. If the file is clean, say so.",
       "files": ["evals/fixtures/tautological-circus.spec.ts"],
       "expected_output": "Detects tautological_assertion, conditional_assertion, truthiness_only, and no_production_call",
       "expectations": [
-        "Identifies 'tautological_assertion' on 'should hash password with bcrypt rounds' (assert.ok(true))",
-        "Identifies 'tautological_assertion' on 'should match known hash to original plaintext' (identical literals)",
-        "Identifies 'conditional_assertion' on 'should enforce rate limit after 5 failed attempts'",
-        "Classifies tautological_assertion as must-fail severity",
-        "Classifies conditional_assertion as must-fail severity",
-        "Identifies 'truthiness_only' on 'should hash password with bcrypt rounds'",
+        "Identifies tautological assertion on 'should hash password' (assert.ok(true))",
+        "Identifies tautological assertion on 'should match known hash' (identical string literals)",
+        "Identifies conditional assertion on 'should enforce rate limit' (assertions inside if block)",
+        "Classifies tautological and conditional assertions as must-fail",
+        "Identifies truthiness-only pattern on 'should hash password'",
         "Does NOT flag 'should generate valid JWT with correct claims' — it has proper value assertions",
         "Explains that assert.ok(true) always passes and verifies nothing",
-        "Explains that conditional assertions may execute zero assertions"
+        "Explains that assertions inside if blocks may never execute"
       ],
       "ground_truth": {
         "expected_rules": ["tautological_assertion", "conditional_assertion", "truthiness_only", "no_negative_test", "no_production_call"],
@@ -55,15 +54,15 @@
     {
       "id": 3,
       "name": "truthiness-and-type-only",
-      "prompt": "Review this test file for weak test patterns. Use the slop-test-detector to analyze it. Report all findings with rule names, line numbers, severity, and explain the impact of each issue.",
+      "prompt": "Review this test file for weak test patterns and quality issues. For each issue found, report: the pattern name, the test name, the line number, the severity (must-fail vs should-fail), and explain the impact. If the file is clean, say so.",
       "files": ["evals/fixtures/truthiness-and-type-only.spec.ts"],
       "expected_output": "Detects truthiness_only, assert_on_type_not_value, and assert_return_type_only",
       "expectations": [
-        "Identifies 'assert_on_type_not_value' on 'should detect column types from sample data'",
-        "Identifies 'truthiness_only' on 'should generate report ID for pipeline run'",
-        "Identifies 'assert_return_type_only' on 'should generate report ID for pipeline run'",
-        "Does NOT flag 'should aggregate numeric columns with correct totals' — it asserts actual values",
-        "Explains that typeof-only assertions verify shape but not actual behavior",
+        "Identifies typeof-only assertions on 'should detect column types'",
+        "Identifies truthiness-only pattern on 'should generate report ID'",
+        "Identifies return-value-only check on 'should generate report ID'",
+        "Does NOT flag 'should aggregate numeric columns' — it asserts actual values",
+        "Explains that typeof-only assertions verify shape but not behavior",
         "Explains that assert.ok(identifier) only checks existence, not correctness",
         "Provides line numbers for each finding"
       ],
@@ -78,18 +77,18 @@
     {
       "id": 4,
       "name": "roundtrip-schema",
-      "prompt": "Review this test file for weak test patterns. Use the slop-test-detector to analyze it. Report all findings with rule names, line numbers, severity, and explain the impact of each issue.",
+      "prompt": "Review this test file for weak test patterns and quality issues. For each issue found, report: the pattern name, the test name, the line number, the severity (must-fail vs should-fail), and explain the impact. If the file is clean, say so.",
       "files": ["evals/fixtures/roundtrip-schema.spec.ts"],
-      "expected_output": "Detects literal_roundtrip, schema_success_only, duplicate_assertion_set, and no_production_call",
+      "expected_output": "Detects literal roundtrip, schema success-only checks, and duplicate assertion sets",
       "expectations": [
-        "Identifies 'literal_roundtrip' on 'should store display name from creation payload'",
-        "Identifies 'literal_roundtrip' on 'should preserve timezone setting'",
-        "Identifies 'schema_success_only' on 'should validate email format with schema'",
-        "Identifies 'schema_success_only' on 'should accept valid profile payload'",
-        "Identifies 'duplicate_assertion_set' on 'should accept valid profile payload'",
-        "Explains that literal roundtrip tests only verify serialization, not logic",
-        "Explains that checking only .success misses .data field and .error.issues validation",
-        "Does NOT report 'schema_success_only' on 'should reject profile with missing email' — that test checks .error.issues"
+        "Identifies literal roundtrip on 'should store display name' (asserts same value used in construction)",
+        "Identifies literal roundtrip on 'should preserve timezone'",
+        "Identifies schema success-only check on 'should validate email format' (only checks .success)",
+        "Identifies schema success-only check on 'should accept valid profile'",
+        "Identifies duplicate assertion set between the two schema tests",
+        "Explains that literal roundtrip tests verify serialization, not logic",
+        "Explains that checking only .success misses .data and .error validation",
+        "Does NOT report schema success-only on 'should reject profile with missing email' — it checks .error.issues"
       ],
       "ground_truth": {
         "expected_rules": ["literal_roundtrip", "schema_success_only", "duplicate_assertion_set", "no_production_call", "no_negative_test"],
@@ -102,13 +101,13 @@
     {
       "id": 5,
       "name": "duplicate-no-variation",
-      "prompt": "Review this test file for weak test patterns. Use the slop-test-detector to analyze it. Report all findings with rule names, line numbers, severity, and explain the impact of each issue.",
+      "prompt": "Review this test file for weak test patterns and quality issues. For each issue found, report: the pattern name, the test name, the line number, the severity (must-fail vs should-fail), and explain the impact. If the file is clean, say so.",
       "files": ["evals/fixtures/duplicate-no-variation.spec.ts"],
-      "expected_output": "Detects duplicate_assertion_set and no_input_variation",
+      "expected_output": "Detects duplicate assertion sets and no input variation",
       "expectations": [
-        "Identifies 'duplicate_assertion_set' on 'should shorten HTTPS URL to 8-char slug'",
-        "Identifies 'duplicate_assertion_set' on 'should classify URL protocol for redirect'",
-        "Identifies 'no_input_variation' on 'should classify URL protocol for redirect'",
+        "Identifies duplicate assertions between 'should shorten HTTP' and 'should shorten HTTPS'",
+        "Identifies duplicate assertions between the two classify tests",
+        "Identifies no input variation on classify() — same args in sibling tests",
         "Explains that identical assertion sequences indicate copy-paste without differentiation",
         "Explains that calling the same function with identical args provides no additional coverage",
         "Does NOT flag 'should track click count per slug' — it has unique assertions and inputs"
@@ -124,14 +123,14 @@
     {
       "id": 6,
       "name": "no-negative-no-production",
-      "prompt": "Review this test file for weak test patterns. Use the slop-test-detector to analyze it. Report all findings with rule names, line numbers, severity, and explain the impact of each issue.",
+      "prompt": "Review this test file for weak test patterns and quality issues. For each issue found, report: the pattern name, the test name, the line number, the severity (must-fail vs should-fail), and explain the impact. If the file is clean, say so.",
       "files": ["evals/fixtures/no-negative-no-production.spec.ts"],
-      "expected_output": "Detects no_negative_test and no_production_call",
+      "expected_output": "Detects no negative tests and tests that call no production code",
       "expectations": [
-        "Identifies 'no_negative_test' on the describe block",
-        "Identifies 'no_production_call' on 'should merge default values into partial config'",
-        "Identifies 'no_production_call' on 'should handle nested keys with dot notation'",
-        "Does NOT flag 'should load config from JSON file' with no_production_call — it calls ConfigLoader",
+        "Identifies that the describe block has no negative tests (no throws/rejects)",
+        "Identifies that 'should merge default values' calls no production code",
+        "Identifies that 'should handle nested keys' calls no production code",
+        "Does NOT flag 'should load config from JSON file' — it calls ConfigLoader",
         "Explains that testing only happy paths misses error handling",
         "Explains that tests without production function calls test language guarantees, not app code"
       ],
@@ -146,13 +145,12 @@
     {
       "id": 7,
       "name": "clean-contract",
-      "prompt": "Review this test file for weak test patterns. Use the slop-test-detector to analyze it. Report all findings with rule names, line numbers, severity, and explain the impact of each issue.",
+      "prompt": "Review this test file for weak test patterns and quality issues. For each issue found, report: the pattern name, the test name, the line number, the severity (must-fail vs should-fail), and explain the impact. If the file is clean, say so.",
       "files": ["evals/fixtures/clean-contract.spec.ts"],
-      "expected_output": "No slop findings — this is a well-written test file with proper assertions and negative tests",
+      "expected_output": "No findings — well-written test file with proper assertions and negative tests",
       "expectations": [
-        "Reports zero findings or states no slop was detected",
+        "Reports zero findings or states no issues were detected",
         "Does NOT flag any test in this file",
-        "Reports a score of 100 or states the file is clean",
         "Does NOT produce false positives on well-structured tests with proper assertions"
       ],
       "ground_truth": {
@@ -166,13 +164,12 @@
     {
       "id": 8,
       "name": "clean-state-machine",
-      "prompt": "Review this test file for weak test patterns. Use the slop-test-detector to analyze it. Report all findings with rule names, line numbers, severity, and explain the impact of each issue.",
+      "prompt": "Review this test file for weak test patterns and quality issues. For each issue found, report: the pattern name, the test name, the line number, the severity (must-fail vs should-fail), and explain the impact. If the file is clean, say so.",
       "files": ["evals/fixtures/clean-state-machine.spec.ts"],
-      "expected_output": "No slop findings — well-written state transition tests with proper error cases",
+      "expected_output": "No findings — well-written state transition tests with proper error cases",
       "expectations": [
-        "Reports zero findings or states no slop was detected",
+        "Reports zero findings or states no issues were detected",
         "Does NOT flag any test in this file",
-        "Reports a score of 100 or states the file is clean",
         "Does NOT produce false positives on state machine tests with throws assertions"
       ],
       "ground_truth": {
@@ -186,14 +183,14 @@
     {
       "id": 9,
       "name": "false-positive-helpers",
-      "prompt": "Review this test file for weak test patterns. Use the slop-test-detector to analyze it. The file uses custom assertion helpers (assertEventEmitted, assertPayloadContains, testDeliveryOrder) that internally call assert.*. Configure assertionEquivalents accordingly. Report all findings.",
+      "prompt": "Review this test file for weak test patterns and quality issues. The file uses custom assertion helpers (assertEventEmitted, assertPayloadContains, testDeliveryOrder) that internally call assert.*. Take that into account when assessing test quality. Report any issues found.",
       "files": ["evals/fixtures/false-positive-helpers.spec.ts"],
-      "expected_output": "Should recognize assertion equivalents and NOT flag tests as empty or truthiness-only. May flag no_negative_test.",
+      "expected_output": "Should recognize assertion equivalents and NOT flag tests as empty or truthiness-only",
       "expectations": [
-        "Does NOT flag 'empty_test_body' on any test — assertion equivalents are present",
-        "Does NOT flag 'truthiness_only' on any test — assertion equivalents count as real assertions",
-        "Recognizes assertEventEmitted, assertPayloadContains, testDeliveryOrder as assertion equivalents",
-        "If it reports any findings, they are limited to no_negative_test (legitimate: no throws/rejects)"
+        "Does NOT flag empty test body on any test — assertion equivalents are present",
+        "Does NOT flag truthiness-only on any test — helpers count as real assertions",
+        "Recognizes that assertEventEmitted, assertPayloadContains, testDeliveryOrder are assertion helpers",
+        "If it reports any findings, they are limited to missing negative tests"
       ],
       "ground_truth": {
         "expected_rules": ["no_negative_test"],
@@ -206,14 +203,14 @@
     {
       "id": 10,
       "name": "false-positive-conditional",
-      "prompt": "Review this test file for weak test patterns. Use the slop-test-detector to analyze it. Report all findings with rule names, line numbers, severity, and explain the impact of each issue.",
+      "prompt": "Review this test file for weak test patterns and quality issues. For each issue found, report: the pattern name, the test name, the line number, the severity (must-fail vs should-fail), and explain the impact. If the file is clean, say so.",
       "files": ["evals/fixtures/false-positive-conditional.spec.ts"],
-      "expected_output": "No slop findings — conditional setup is different from conditional assertions, and commented code coexists with active assertions",
+      "expected_output": "No findings — conditional setup is different from conditional assertions, and commented code coexists with active assertions",
       "expectations": [
-        "Reports zero findings or states no slop was detected",
-        "Does NOT flag 'conditional_assertion' — assertions are AFTER the if block, not inside it",
-        "Does NOT flag 'commented_out_assertions' — active assertions exist alongside commented ones",
-        "Reports a score of 100 or states the file is clean"
+        "Reports zero findings or states no issues were detected",
+        "Does NOT flag conditional assertion — assertions are AFTER the if block, not inside it",
+        "Does NOT flag commented-out assertions — active assertions exist alongside commented ones",
+        "Does NOT produce false positives on this tricky file"
       ],
       "ground_truth": {
         "expected_rules": [],
@@ -226,12 +223,12 @@
     {
       "id": 11,
       "name": "property-and-vacuous",
-      "prompt": "Review this test file for weak test patterns. Use the slop-test-detector to analyze it. Report all findings with rule names, line numbers, severity, and explain the impact of each issue.",
+      "prompt": "Review this test file for weak test patterns and quality issues. For each issue found, report: the pattern name, the test name, the line number, the severity (must-fail vs should-fail), and explain the impact. If the file is clean, say so.",
       "files": ["evals/fixtures/property-and-vacuous.spec.ts"],
-      "expected_output": "Detects vacuous_property (return true with no assertions) and impossible_assertion",
+      "expected_output": "Detects vacuous property test and impossible assertion",
       "expectations": [
-        "Identifies 'vacuous_property' on 'should always return results for any query'",
-        "Identifies 'impossible_assertion' on 'should return non-negative result count'",
+        "Identifies vacuous property test on 'should always return results' (return true with no assertions)",
+        "Identifies impossible assertion on 'should return non-negative result count' (.length >= 0)",
         "Explains that fc.property with return true and no assertions passes vacuously",
         "Explains that .length >= 0 is always true and cannot fail",
         "Does NOT flag 'should rank exact matches higher than partial' — proper value assertions",
@@ -248,16 +245,16 @@
     {
       "id": 12,
       "name": "defect-comments",
-      "prompt": "Review this test file for weak test patterns using the STRICT preset of slop-test-detector (all 18 rules enabled, including missing_defect_comment and trivial_defect_comment). Report all findings with rule names, line numbers, severity, and explain the impact of each issue.",
+      "prompt": "Review this test file for weak test patterns and quality issues. This project enforces a convention where each test must have a preceding '// Defect:' comment explaining what production bug the test catches. Check for missing or trivial defect comments. Report all findings.",
       "files": ["evals/fixtures/defect-comments.spec.ts"],
-      "expected_output": "Detects missing_defect_comment and trivial_defect_comment on tests without adequate Defect: comments",
+      "expected_output": "Detects missing and trivial defect comments",
       "expectations": [
-        "Identifies 'missing_defect_comment' on 'should evict least recently used entry when at capacity'",
-        "Identifies 'missing_defect_comment' on 'should respect max size limit'",
-        "Identifies 'trivial_defect_comment' on 'should handle TTL expiry correctly'",
-        "Does NOT flag 'should update access order on get to maintain LRU invariant' with missing or trivial defect — it has a proper Defect: comment",
+        "Identifies missing defect comment on 'should evict least recently used entry'",
+        "Identifies missing defect comment on 'should respect max size limit'",
+        "Identifies trivial defect comment on 'should handle TTL expiry' ('TTL bug' is too brief)",
+        "Does NOT flag 'should update access order' — it has a proper Defect: comment",
         "Explains that Defect: comments must describe what breaks, for whom, and the consequence",
-        "Explains that trivial defect comments (fewer than 10 words) don't convey enough information"
+        "Explains that trivial defect comments (too few words) don't convey enough information"
       ],
       "ground_truth": {
         "expected_rules": ["missing_defect_comment", "trivial_defect_comment", "no_negative_test"],
@@ -270,15 +267,15 @@
     {
       "id": 13,
       "name": "self-referential",
-      "prompt": "Review this test file for weak test patterns. Use the slop-test-detector to analyze it. Report all findings with rule names, line numbers, severity, and explain the impact of each issue.",
+      "prompt": "Review this test file for weak test patterns and quality issues. For each issue found, report: the pattern name, the test name, the line number, the severity (must-fail vs should-fail), and explain the impact. If the file is clean, say so.",
       "files": ["evals/fixtures/self-referential.spec.ts"],
-      "expected_output": "Detects self_referential_assertion where assert.equal(x, x) compares a variable to itself",
+      "expected_output": "Detects self-referential assertions where assert.equal(x, x) compares a variable to itself",
       "expectations": [
-        "Identifies 'self_referential_assertion' on 'should track stock level after restock'",
-        "Identifies 'self_referential_assertion' on 'should calculate reorder point'",
-        "Classifies self_referential_assertion as must-fail severity",
+        "Identifies self-referential assertion on 'should track stock level' (assert.equal(stock, stock))",
+        "Identifies self-referential assertion on 'should calculate reorder point' (assert.equal(point, point))",
+        "Classifies self-referential assertions as must-fail severity",
         "Explains that assert.equal(x, x) compares a variable to itself and always passes",
-        "Does NOT flag 'should deduct stock on order fulfillment' — it asserts against a specific expected value",
+        "Does NOT flag 'should deduct stock on order fulfillment' — it asserts against expected value 75",
         "Does NOT flag 'should throw when fulfilling more than available' — proper throws assertion"
       ],
       "ground_truth": {
