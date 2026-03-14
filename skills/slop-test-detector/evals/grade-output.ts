@@ -195,40 +195,51 @@ function gradeExpectation(output: string, expectation: string): { passed: boolea
   // "Classifies X as must-fail/should-fail"
   if (expLower.includes("classifies") && (expLower.includes("must-fail") || expLower.includes("should-fail"))) {
     const severity = expLower.includes("must-fail") ? "must-fail" : "should-fail";
-    // Extract the issue name being classified
     const classifiesMatch = expectation.match(/classifies\s+(.+?)\s+as\s+(must-fail|should-fail)/i);
-    const issueName = classifiesMatch ? classifiesMatch[1].toLowerCase().replace(/['-]/g, "") : "";
-    const issueWords = issueName.split(/\s+/).filter((w) => w.length > 2);
-
-    // Check that the severity appears NEAR the issue name (within ~5 lines)
+    const issueGroup = classifiesMatch ? classifiesMatch[1] : "";
+    const severityVariants = [
+      severity,
+      severity.replace("-", " "),
+      ...(severity === "must-fail" ? ["critical", "blocking"] : []),
+    ];
     const lines = output.split("\n");
-    let found = false;
-    for (let i = 0; i < lines.length; i++) {
-      const ll = lines[i].toLowerCase();
-      const hasSev =
-        ll.includes(severity) ||
-        ll.includes(severity.replace("-", " ")) ||
-        (severity === "must-fail" && (ll.includes("critical") || ll.includes("blocking")));
-      if (!hasSev) continue;
+    const issueConcepts = issueGroup
+      .split(/\s+and\s+|,\s*/)
+      .map((part) => part.trim())
+      .filter((part) => part.length > 0);
+    const missingConcepts: string[] = [];
 
-      // Check nearby lines (±3) for the issue name
-      const window = lines
-        .slice(Math.max(0, i - 3), i + 4)
-        .join(" ")
-        .toLowerCase();
-      const issueNearby =
-        issueWords.length === 0 ||
-        issueWords.filter((w) => window.includes(w)).length >= Math.ceil(issueWords.length * 0.5);
-      if (issueNearby) {
-        found = true;
+    for (const concept of issueConcepts) {
+      const conceptIndex = lines.findIndex((line) => hasConceptMatch(line, concept));
+      if (conceptIndex === -1) {
+        missingConcepts.push(concept);
+        continue;
+      }
+
+      const currentLine = lines[conceptIndex].toLowerCase();
+      const prevLine = (lines[conceptIndex - 1] ?? "").toLowerCase();
+      const nextLine = (lines[conceptIndex + 1] ?? "").toLowerCase();
+      const inlineSeverity = severityVariants.some(
+        (variant) => currentLine.includes(variant) || prevLine.includes(variant) || nextLine.includes(variant),
+      );
+      let headingSeverity = false;
+      for (let i = conceptIndex - 1; i >= Math.max(0, conceptIndex - 4); i--) {
+        if (!isSeveritySectionLine(lines[i], severityVariants)) continue;
+        const intervening = lines.slice(i + 1, conceptIndex);
+        if (intervening.every((line) => isIssueListLine(line))) {
+          headingSeverity = true;
+        }
         break;
       }
+      const hasSeverityNearConcept = inlineSeverity || headingSeverity;
+      if (!hasSeverityNearConcept) missingConcepts.push(`${concept} (missing ${severity})`);
     }
     return {
-      passed: found,
-      evidence: found
-        ? `Severity '${severity}' found near '${issueName}'`
-        : `Severity '${severity}' not found near '${issueName}'`,
+      passed: missingConcepts.length === 0,
+      evidence:
+        missingConcepts.length === 0
+          ? `Severity '${severity}' found for all classified concepts`
+          : `Missing severity evidence for: ${missingConcepts.join(", ")}`,
     };
   }
 
