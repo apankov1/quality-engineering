@@ -1,6 +1,6 @@
 ---
 name: slop-test-detector
-description: "Static analyzer that detects 18 slop patterns in test code — tests that compile and pass but catch zero bugs."
+description: "Static analyzer that detects 18 slop patterns in test code — tests that compile and pass but catch zero bugs. Use when reviewing test files, auditing test quality, checking for weak tests, validating generated tests, or when the user mentions test slop, empty tests, missing assertions, or tautological checks. TRIGGER on any test review or test quality task."
 ---
 
 # Slop Test Detector
@@ -134,7 +134,18 @@ const report = analyzeTestFile(source, 'my-module.spec.ts');
 console.log(formatReport(report));
 ```
 
-### Step 2: Validate During Generation
+### Step 2: Report Findings with Impact
+
+When presenting findings, always include:
+- **Rule name** — the specific slop pattern (e.g., `tautological_assertion`)
+- **Test name and line number** — so the user can navigate to it
+- **Severity** — `must-fail` (test is structurally broken) vs `should-fail` (quality concern)
+- **Why it matters** — what production bug could slip through because of this pattern
+- **What clean tests should NOT be flagged** — avoid false positives on well-written tests
+
+If a test file has assertion-equivalent helpers (functions named `assert*()` or `test*()` that internally call `assert.*`), configure `assertionEquivalents` to prevent false `empty_test_body` findings.
+
+### Step 3: Validate During Generation
 
 Before writing a generated test to disk, check for slop:
 
@@ -151,7 +162,7 @@ if (findings.some(f => f.severity === 'must-fail')) {
 }
 ```
 
-### Step 3: Machine-Readable Output (CI)
+### Step 4: Machine-Readable Output (CI)
 
 ```typescript
 const report = analyzeTestFile(source, filePath, getPreset('balanced'));
@@ -159,7 +170,7 @@ const json = formatReportJSON(report);
 // Outputs structured JSON with filePath, score, summary, findings[]
 ```
 
-### Step 4: Interpret the Score
+### Step 5: Interpret the Score
 
 The score formula weights must-fail findings (1.0) higher than should-fail (0.3):
 
