@@ -1,8 +1,9 @@
 /**
- * Ground truth validator — runs classification functions on fixture data
- * and prints the actual results for each scenario.
+ * Ground truth regression check — calls classification functions directly
+ * to verify fixtures produce expected results. Tests the ANALYZER, not the skill.
+ * Use run-benchmark.ts to test whether the skill improves model behavior.
  *
- * Usage: npx tsx evals/validate-fixtures.ts
+ * Usage: npx tsx evals/check-ground-truth.ts
  */
 
 import { readFileSync } from "node:fs";

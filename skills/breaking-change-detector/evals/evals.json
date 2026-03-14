@@ -1,11 +1,12 @@
 {
   "skill_name": "breaking-change-detector",
   "benchmark_question": "Does breaking-change-detector make the model better at identifying breaking vs safe changes in contracts, schemas, and event types?",
+  "prompt_design": "All evals use the same neutral prompt for both with_skill and without_skill conditions. The only variable is whether the skill is available in the execution context (project directory with skills installed vs clean temp directory).",
   "evals": [
     {
       "id": 1,
       "name": "contract-field-removal",
-      "prompt": "Review this contract change for breaking changes. The file shows v1 and v2 of a UserSession interface. Use the breaking-change-detector skill to classify each change. Report whether each change is breaking or safe, with the specific category and explanation.",
+      "prompt": "Review this contract change for breaking changes. The file shows v1 and v2 of a UserSession interface. Classify each change as breaking or safe and explain why.",
       "files": ["evals/fixtures/contract-field-removal.ts"],
       "expected_output": "All 4 changes are breaking: removal, rename, narrowing, and required addition",
       "expectations": [
@@ -14,7 +15,7 @@
         "Classifies narrowing of 'status' from string to union as breaking",
         "Classifies addition of required 'tenantId' as breaking",
         "Explains that field removal breaks existing consumers",
-        "Explains that a rename is effectively a removal + addition"
+        "Explains that a rename is effectively a removal plus addition"
       ],
       "ground_truth": {
         "all_breaking": true,
@@ -25,7 +26,7 @@
     {
       "id": 2,
       "name": "contract-safe-additions",
-      "prompt": "Review this contract change for breaking changes. The file shows v2 and v3 of a Product interface. Use the breaking-change-detector skill to classify each change. Report whether each change is breaking or safe.",
+      "prompt": "Review this contract change for breaking changes. The file shows v2 and v3 of a Product interface. Classify each change as breaking or safe and explain why.",
       "files": ["evals/fixtures/contract-safe-additions.ts"],
       "expected_output": "All 4 changes are safe: optional additions, widening, and optionalization",
       "expectations": [
@@ -45,16 +46,16 @@
     {
       "id": 3,
       "name": "schema-missing-catch",
-      "prompt": "Review this Zod schema for a Durable Object snapshot. Check whether all fields have .catch() defaults for safe hibernation/wake cycles. Use the breaking-change-detector skill to classify the schema safety.",
+      "prompt": "Review this Zod schema used for Durable Object snapshot persistence. Check whether all fields have .catch() defaults so that old hibernated instances can wake safely with a newer schema version. Report which fields are safe and which are missing defaults.",
       "files": ["evals/fixtures/schema-missing-catch.ts"],
       "expected_output": "8 of 9 fields are missing .catch() defaults — only settings.language has one",
       "expectations": [
         "Identifies that the schema is NOT safe for hibernation",
         "Reports that 'version', 'playerId', 'level' are missing .catch() defaults",
         "Reports that 'inventory' and 'achievements' are missing .catch() defaults",
-        "Notes that 'settings.language' has .catch('en') and is safe",
+        "Notes that 'settings.language' has .catch() and is safe",
         "Reports 'lastCheckpoint' is missing .catch() default",
-        "Explains that missing .catch() means old hibernated instances crash on wake with new schema"
+        "Explains that missing .catch() causes old hibernated instances to crash on wake"
       ],
       "ground_truth": {
         "safe": false,
@@ -66,14 +67,13 @@
     {
       "id": 4,
       "name": "schema-with-catch",
-      "prompt": "Review this Zod schema for a Durable Object snapshot. Check whether all fields have .catch() defaults for safe hibernation/wake cycles. Use the breaking-change-detector skill to classify the schema safety.",
+      "prompt": "Review this Zod schema used for Durable Object snapshot persistence. Check whether all fields have .catch() defaults so that old hibernated instances can wake safely with a newer schema version. Report which fields are safe and which are missing defaults.",
       "files": ["evals/fixtures/schema-with-catch.ts"],
       "expected_output": "All fields have .catch() defaults — schema is safe for hibernation",
       "expectations": [
         "Reports the schema as safe for hibernation",
-        "Does NOT report any violations",
-        "Notes that all top-level fields have .catch() defaults",
-        "Does NOT produce false positives on well-structured schemas"
+        "Does NOT report any fields missing .catch() defaults",
+        "Notes that all top-level fields have .catch() defaults"
       ],
       "ground_truth": {
         "safe": true,
@@ -84,7 +84,7 @@
     {
       "id": 5,
       "name": "deserializer-strict-parse",
-      "prompt": "Review this Durable Object class for deserialization safety. Check whether the fromJSON method uses .safeParse() with fallback instead of .parse(). Use the breaking-change-detector skill.",
+      "prompt": "Review this Durable Object class for deserialization safety. Check whether the fromJSON method uses .safeParse() with a graceful fallback, or .parse() which will throw on stale persisted data. Report your findings.",
       "files": ["evals/fixtures/deserializer-strict-parse.ts"],
       "expected_output": "fromJSON uses .parse() on line 41 — should use .safeParse() with fallback",
       "expectations": [
@@ -104,14 +104,13 @@
     {
       "id": 6,
       "name": "deserializer-safe-parse",
-      "prompt": "Review this Durable Object class for deserialization safety. Check whether the fromJSON method uses .safeParse() with fallback instead of .parse(). Use the breaking-change-detector skill.",
+      "prompt": "Review this Durable Object class for deserialization safety. Check whether the fromJSON method uses .safeParse() with a graceful fallback, or .parse() which will throw on stale persisted data. Report your findings.",
       "files": ["evals/fixtures/deserializer-safe-parse.ts"],
       "expected_output": "fromJSON correctly uses .safeParse() with fallback — safe",
       "expectations": [
         "Reports the fromJSON method as safe",
         "Does NOT flag .safeParse() as a violation",
-        "Notes the graceful fallback pattern (default state on parse failure)",
-        "Does NOT produce false positives on correct deserialization patterns"
+        "Notes the graceful fallback pattern when parse fails"
       ],
       "ground_truth": {
         "safe": true,
@@ -122,15 +121,15 @@
     {
       "id": 7,
       "name": "event-type-removal",
-      "prompt": "Review this event type migration. The file shows v1 and v2 event type sets for an order processing system. Use the breaking-change-detector skill to classify whether these changes are safe for event replay.",
+      "prompt": "Review this event type migration for breaking changes. The file shows v1 and v2 event type sets for an order processing system. Classify each change and assess whether the migration is safe for event replay.",
       "files": ["evals/fixtures/event-type-removal.ts"],
       "expected_output": "Breaking: ORDER_UPDATED and PAYMENT_PENDING were removed, breaking replay",
       "expectations": [
         "Identifies removal of 'ORDER_UPDATED' as breaking",
         "Identifies removal of 'PAYMENT_PENDING' as breaking",
-        "Notes that 'ORDER_MODIFIED', 'ORDER_ARCHIVED', and 'PAYMENT_INITIATED' were added (safe)",
+        "Notes that 'ORDER_MODIFIED', 'ORDER_ARCHIVED', and 'PAYMENT_INITIATED' were added safely",
         "Explains that removing event types breaks replay of historical events",
-        "Classifies the overall change as breaking (not safe)"
+        "Classifies the overall change as breaking"
       ],
       "ground_truth": {
         "safe": false,
@@ -142,14 +141,14 @@
     {
       "id": 8,
       "name": "api-field-changes",
-      "prompt": "Review this API response contract change. The file shows v1 and v2 field definitions for a User API endpoint. Use the breaking-change-detector skill to classify each change as breaking or safe.",
+      "prompt": "Review this API response contract change for breaking changes. The file shows v1 and v2 field definitions for a User API endpoint. Classify each change as breaking or safe and explain why.",
       "files": ["evals/fixtures/api-field-changes.ts"],
       "expected_output": "4 breaking changes (removal, type change, made required, semantic change) and 2 safe additions",
       "expectations": [
         "Identifies removal of 'avatar' field as breaking",
-        "Identifies type change of 'age' (number→string) as breaking",
+        "Identifies type change of 'age' from number to string as breaking",
         "Identifies making 'email' required as breaking",
-        "Identifies semantic change of 'role' (permission level→department) as breaking",
+        "Identifies semantic change of 'role' from permission level to department as breaking",
         "Classifies addition of optional 'phone' as safe",
         "Classifies addition of optional 'timezone' as safe",
         "Does NOT flag unchanged fields (id, name, createdAt)"
@@ -164,9 +163,9 @@
     {
       "id": 9,
       "name": "enum-status-mixed",
-      "prompt": "Review these API contract changes for the order service v3. Check both the status code changes and enum value changes. Use the breaking-change-detector skill to classify each.",
+      "prompt": "Review these API contract changes for the order service v3. Check both the HTTP status code changes and the OrderStatus enum value changes. Classify each as breaking or safe.",
       "files": ["evals/fixtures/enum-status-mixed.ts"],
-      "expected_output": "Both status codes and enum values have breaking changes (removals)",
+      "expected_output": "Both status codes and enum values have breaking changes due to removals",
       "expectations": [
         "Identifies removal of status code 202 as breaking",
         "Notes addition of status code 207 as safe",
@@ -185,7 +184,7 @@
     {
       "id": 10,
       "name": "all-safe-changes",
-      "prompt": "Review this notification service contract update. Check all changes across contract fields, event types, status codes, and enum values. Use the breaking-change-detector skill to classify each.",
+      "prompt": "Review this notification service contract update for breaking changes. Check all changes across contract fields, event types, status codes, and enum values. Classify each as breaking or safe.",
       "files": ["evals/fixtures/all-safe-changes.ts"],
       "expected_output": "All changes are safe — only additions, widenings, and optionalizations",
       "expectations": [
@@ -204,7 +203,7 @@
     {
       "id": 11,
       "name": "false-positive-deprecation",
-      "prompt": "Review this billing service contract change. The file shows v4 and v5 of a BillingAccount interface. Some fields are deprecated but still present. Use the breaking-change-detector skill to classify each change as breaking or safe.",
+      "prompt": "Review this billing service contract change for breaking changes. The file shows v4 and v5 of a BillingAccount interface. Some fields are marked as deprecated. Classify each change as breaking or safe and explain why.",
       "files": ["evals/fixtures/false-positive-deprecation.ts"],
       "expected_output": "All changes are safe — deprecated fields are still present (not removed), new fields are optional",
       "expectations": [
@@ -214,7 +213,7 @@
         "Does NOT confuse deprecation with removal",
         "Classifies widening of 'currency' as safe",
         "Classifies addition of optional 'billingCycle' as safe",
-        "Reports overall change as safe/backward-compatible"
+        "Reports overall change as safe and backward-compatible"
       ],
       "ground_truth": {
         "all_safe": true,
