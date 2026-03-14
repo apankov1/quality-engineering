@@ -1,6 +1,6 @@
 ---
 name: observability-testing
-description: Verifies structured log output and error context. Provides mock logger creation, log level policy enforcement, and assertion patterns for observability testing.
+description: "Use when testing logging, structured log output, or observability concerns. Provides mock logger creation, log entry assertions, log level policy enforcement, and error context validation. Trigger on: 'test log output', 'structured logging assertions', 'mock logger', 'verify error logs include stack trace', 'log level policy', 'no debug logs in production', 'audit trail', 'observability tests', 'correlation ID in logs'. Skip for: setting up logging infrastructure, writing log statements, or production code review."
 ---
 
 # Observability Testing

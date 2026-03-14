@@ -164,7 +164,7 @@ Ships with real runnable code:
 
 ### websocket-client-resilience
 
-6 resilience patterns for WebSocket clients, designed for real-world mobile network conditions where P99 latency is 5-8 seconds.
+6 resilience patterns for WebSocket clients, designed for unreliable network conditions including cellular connections with high tail latency.
 
 - **`resilience.ts`** -- Backoff calculator, circuit breaker state machine, heartbeat hysteresis, gap detector, timeout classifier
 - Command acknowledgment, sequence gap detection, mobile-aware timeouts

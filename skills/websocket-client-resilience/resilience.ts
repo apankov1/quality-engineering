@@ -174,9 +174,9 @@ export function detectSequenceGap(lastReceived: number, incoming: number): Seque
  * Classify a timeout duration as safe or risky for mobile networks.
  *
  * From patterns.md Pattern 6:
- * - Mobile P99 latency is 5-8 seconds
- * - Timeouts under 10 seconds risk false disconnects on mobile
- * - 10+ seconds accommodates real-world network conditions
+ * - Tail latency on cellular networks can reach several seconds
+ * - Timeouts under 10 seconds risk false disconnects on slow connections
+ * - 10+ seconds accommodates typical mobile network variability
  */
 export function classifyTimeout(timeoutMs: number): "safe" | "risky" {
   return timeoutMs >= 10_000 ? "safe" : "risky";

@@ -1,6 +1,6 @@
 ---
 name: barrier-concurrency-testing
-description: Deterministic race condition testing using barriers and deferred promises. Replaces flaky setTimeout-based timing tests with reproducible interleaving control.
+description: "Deterministic race condition testing using barriers and deferred promises. Use when writing tests for concurrent operations, race conditions, parallel processing, or when existing timing-based tests are flaky. Trigger on: 'race condition test', 'concurrent writes', 'parallel test', 'flaky timing test', 'deterministic interleaving', 'barrier synchronization', 'sequence continuity', 'test items preserved during concurrent operations'. Replaces setTimeout-based timing with reproducible barrier control. Skip for: sequential logic, single-threaded tests, or API endpoint testing."
 ---
 
 # Barrier Concurrency Testing

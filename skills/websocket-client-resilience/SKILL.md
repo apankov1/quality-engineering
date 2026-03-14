@@ -1,13 +1,13 @@
 ---
 name: websocket-client-resilience
-description: "Client-side WebSocket resilience patterns: backoff with jitter, circuit breakers, heartbeat hysteresis, command acknowledgment, sequence gap detection, and mobile-aware timeouts."
+description: "Client-side WebSocket resilience patterns. Use when implementing or testing reconnection logic, heartbeat detection, command acknowledgment tracking, or message sequence gap detection for WebSocket clients. Trigger on: 'WebSocket reconnection', 'backoff with jitter', 'heartbeat missed', 'circuit breaker for connections', 'command acknowledgment', 'sequence gap detection', 'mobile timeout', 'connection drops', 'WebSocket resilience'. Skip for: server-side WebSocket handling, REST APIs, or non-real-time protocols."
 ---
 
 # WebSocket Client Resilience
 
-6 resilience patterns for WebSocket clients, extracted from real-world mobile network conditions.
+6 resilience patterns for WebSocket clients, designed for unreliable network conditions.
 
-Mobile WebSocket connections fail in ways that local development environments don't surface. P99 latency on 4G networks is 5-8 seconds. A 5-second health check timeout causes false positives on every slow network.
+Mobile WebSocket connections fail in ways that local development environments don't surface. Tail latency on cellular networks can reach several seconds, which means aggressive health check timeouts (e.g. 5 seconds) may cause false disconnects on slow connections.
 
 **When to use**: Implementing WebSocket client reconnection logic, building real-time features with persistent connections, mobile app WebSocket handling, any client that maintains long-lived server connections.
 

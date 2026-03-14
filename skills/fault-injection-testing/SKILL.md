@@ -1,6 +1,6 @@
 ---
 name: fault-injection-testing
-description: Simulates storage and network failures for resilience testing. Provides circuit breaker state machine, retry policies with backoff, and queue preservation assertions.
+description: "Use when testing what happens when things fail — storage errors, network timeouts, API 500s, service outages. Provides circuit breaker state machine, retry policies with exponential backoff, fault injection, and queue preservation assertions. Trigger on: 'circuit breaker test', 'retry logic', 'exponential backoff', 'what happens if the API fails', 'simulate network failure', 'fault injection', 'resilience test', 'queue preservation after crash', 'graceful degradation'. Skip for: happy-path unit tests, UI testing, or code review."
 ---
 
 # Fault Injection Testing
