@@ -296,38 +296,27 @@ function gradeExpectation(output: string, expectation: string): { passed: boolea
     const limitMatch = expectation.match(/limited to\s+(.+?)(?:\s*\(|$)/i);
     if (limitMatch) {
       const allowed = limitMatch[1].toLowerCase().trim();
-      const allowedWords = allowed.split(/[\s_]+/).filter((w) => w.length > 2);
-
-      // Split output into issue sections (look for numbered items, headings, bullets)
-      const issueBlocks = output.split(/(?=^#{1,3}\s+\d|^\*\*\d|^-\s+\*\*|^\d+\.\s+)/m).filter((b) => b.trim());
-
-      // Count issue blocks that DON'T relate to the allowed concept
-      let unrelatedCount = 0;
-      let totalIssueBlocks = 0;
-      for (const block of issueBlocks) {
-        const bl = block.toLowerCase();
-        const looksLikeIssue =
-          bl.includes("issue") ||
-          bl.includes("pattern") ||
-          bl.includes("severity") ||
-          bl.includes("fail") ||
-          bl.includes("weak") ||
-          bl.includes("problem");
-        if (!looksLikeIssue) continue;
-        totalIssueBlocks++;
-        const relatesToAllowed = allowedWords.some((w) => bl.includes(w));
-        if (!relatesToAllowed) unrelatedCount++;
+      const issuePatterns =
+        /\bissues?\s+found\b|\bfound\s+\d+\s+issue|\bweak\s+test|\bmust-fail\b|\bshould-fail\b|\banti-pattern\b|\bseverity\b/i;
+      if (!issuePatterns.test(output)) {
+        return { passed: true, evidence: "No issues reported at all" };
       }
 
-      if (totalIssueBlocks === 0) {
-        return { passed: true, evidence: "No issue blocks found in output" };
-      }
-      const passed = unrelatedCount === 0;
+      const mentionedRules = findMentionedRules(output);
+      const allowedMentions = mentionedRules.filter(
+        (rule) => hasConceptMatch(rule, allowed) || hasConceptMatch(allowed, rule),
+      );
+      const disallowedMentions = mentionedRules.filter((rule) => !allowedMentions.includes(rule));
+      const fallbackAllowed = hasConceptMatch(output, allowed);
+
       return {
-        passed,
-        evidence: passed
-          ? `All ${totalIssueBlocks} issue(s) relate to '${allowed}'`
-          : `${unrelatedCount}/${totalIssueBlocks} issue(s) are unrelated to '${allowed}'`,
+        passed: disallowedMentions.length === 0 && (allowedMentions.length > 0 || fallbackAllowed),
+        evidence:
+          disallowedMentions.length > 0
+            ? `Disallowed issue mentions found: ${disallowedMentions.join(", ")}`
+            : allowedMentions.length > 0 || fallbackAllowed
+              ? `Reported issues are limited to '${allowed}'`
+              : `Issues reported but '${allowed}' was not clearly identified`,
       };
     }
     return { passed: false, evidence: "Could not parse limitation clause" };
