@@ -29,6 +29,7 @@ if (existsSync(snapshotPath)) {
 }
 const evalsData = JSON.parse(readFileSync(evalsPath, "utf-8"));
 const evalsByName = new Map(evalsData.evals.map((e: { name: string }) => [e.name, e]));
+const knownRules = Object.keys(evalsData.rule_coverage_matrix ?? {});
 
 interface Expectation {
   text: string;
@@ -45,6 +46,38 @@ interface GradingResult {
   summary: { passed: number; failed: number; total: number; pass_rate: number };
   duration_ms: number;
   output_chars: number;
+}
+
+function normalizeWords(text: string): string[] {
+  return text
+    .toLowerCase()
+    .replace(/[`*()[\]{}:.,]/g, " ")
+    .replace(/[_-]/g, " ")
+    .split(/\s+/)
+    .filter((w) => w.length > 2);
+}
+
+function hasConceptMatch(text: string, concept: string): boolean {
+  const haystack = text.toLowerCase().replace(/[_-]/g, " ");
+  const conceptWords = normalizeWords(concept);
+  if (conceptWords.length === 0) return false;
+  const matchedWords = conceptWords.filter((w) => haystack.includes(w));
+  return matchedWords.length >= Math.ceil(conceptWords.length * 0.6);
+}
+
+function findMentionedRules(output: string): string[] {
+  return knownRules.filter((rule) => hasConceptMatch(output, rule));
+}
+
+function isSeveritySectionLine(line: string, severityVariants: string[]): boolean {
+  const trimmed = line.trim().toLowerCase();
+  if (trimmed.length === 0 || trimmed.startsWith("-")) return false;
+  return severityVariants.some((variant) => trimmed.includes(variant));
+}
+
+function isIssueListLine(line: string): boolean {
+  const trimmed = line.trim();
+  return trimmed.length === 0 || /^[-*]\s+/.test(trimmed) || /^\d+\.\s+/.test(trimmed);
 }
 
 // --- Grading logic ---
