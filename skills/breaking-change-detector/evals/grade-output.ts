@@ -160,9 +160,9 @@ function gradeExpectation(output: string, expectation: string): { passed: boolea
     // Generic "does not produce false positives" / "does not flag any test"
     // Check if the output reports ANY issues — look for issue-reporting patterns
     const issuePatterns =
-      /\bissues?\s+found\b|\bfound\s+\d+\s+issue|\bweak\s+test\s+pattern|\bmust-fail\b|\bshould-fail\b|\banti-pattern\b|\bseverity\b/i;
+      /\bissues?\s+found\b|\bfound\s+\d+\s+issue|\bweak\s+test\s+pattern|\bmust-fail\b|\bshould-fail\b|\banti-pattern\b|\bseverity\b|\bbreaking\s+change|\b❌\b|\bmissing\s+\.catch\b|\bunsafe\b/i;
     const cleanPatterns =
-      /\bno\s+(issues|findings|problems|weak|slop)\b|\bfile\s+is\s+clean\b|\bwell[- ]written\b|\bwell[- ]structured\b|\b0\s+issues\b/i;
+      /\bno\s+(issues|findings|problems|weak|slop|breaking)\b|\bno\s+breaking\s+changes?\b|\ball\s+(fields\s+)?are\s+(safe|properly|protected)\b|\bfile\s+is\s+clean\b|\bwell[- ]written\b|\bwell[- ]structured\b|\b0\s+issues\b|\bbackward[- ]compatible\b|\bfully\s+safe\b/i;
     const reportsIssues = issuePatterns.test(output);
     const reportsClean = cleanPatterns.test(output);
     const passed = reportsClean && !reportsIssues;
@@ -190,6 +190,76 @@ function gradeExpectation(output: string, expectation: string): { passed: boolea
       passed: looksClean,
       evidence: looksClean ? "Output indicates clean file" : "Output does not clearly indicate clean file",
     };
+  }
+
+  // "Classifies X as breaking/safe" — domain-specific verdict check
+  if (expLower.includes("classifies") && (expLower.includes("as breaking") || expLower.includes("as safe"))) {
+    const verdict = expLower.includes("as breaking") ? "breaking" : "safe";
+    const classifiesMatch = expectation.match(/classifies\s+(.+?)\s+as\s+(breaking|safe)/i);
+    const subject = classifiesMatch ? classifiesMatch[1] : "";
+
+    // Find lines near the subject and check for the verdict
+    const lines = output.split("\n");
+    const subjectWords = normalizeWords(subject);
+    const subjectIndex = lines.findIndex((line) => {
+      const ll = line.toLowerCase().replace(/[_-]/g, " ");
+      return subjectWords.filter((w) => ll.includes(w)).length >= Math.ceil(subjectWords.length * 0.5);
+    });
+
+    if (subjectIndex === -1) {
+      return { passed: false, evidence: `Subject '${subject}' not found in output` };
+    }
+
+    // Check ±5 lines for the verdict
+    const window = lines
+      .slice(Math.max(0, subjectIndex - 5), subjectIndex + 6)
+      .join(" ")
+      .toLowerCase();
+
+    const verdictVariants =
+      verdict === "safe"
+        ? ["safe", "backward compatible", "backward-compatible", "non-breaking", "not breaking", "✅"]
+        : ["breaking", "❌", "incompatible", "will break", "disrupts"];
+
+    const oppositeVariants =
+      verdict === "safe"
+        ? ["breaking", "❌", "incompatible", "will break"]
+        : ["safe", "✅", "non-breaking", "backward compatible"];
+
+    const hasVerdict = verdictVariants.some((v) => window.includes(v));
+    const hasOpposite = oppositeVariants.some((v) => window.includes(v));
+
+    // If both verdict and opposite appear (e.g. "appears breaking but mitigated"),
+    // check which is dominant — look at the final assessment
+    if (hasVerdict && hasOpposite) {
+      // Ambiguous — check if the verdict appears closer to the subject or in a conclusion
+      const verdictDist = verdictVariants.reduce((min, v) => {
+        const idx = window.indexOf(v);
+        return idx >= 0 ? Math.min(min, Math.abs(idx)) : min;
+      }, Number.POSITIVE_INFINITY);
+      const oppDist = oppositeVariants.reduce((min, v) => {
+        const idx = window.indexOf(v);
+        return idx >= 0 ? Math.min(min, Math.abs(idx)) : min;
+      }, Number.POSITIVE_INFINITY);
+      const passed = verdictDist <= oppDist;
+      return {
+        passed,
+        evidence: passed
+          ? `'${subject}' classified as '${verdict}' (primary verdict)`
+          : `'${subject}' has mixed signals — opposite verdict '${verdict === "safe" ? "breaking" : "safe"}' appears closer`,
+      };
+    }
+
+    if (hasVerdict && !hasOpposite) {
+      return { passed: true, evidence: `'${subject}' classified as '${verdict}'` };
+    }
+    if (hasOpposite && !hasVerdict) {
+      return {
+        passed: false,
+        evidence: `'${subject}' classified as '${verdict === "safe" ? "breaking" : "safe"}', not '${verdict}'`,
+      };
+    }
+    return { passed: false, evidence: `No clear '${verdict}' classification found near '${subject}'` };
   }
 
   // "Classifies X as must-fail/should-fail"
@@ -261,10 +331,27 @@ function gradeExpectation(output: string, expectation: string): { passed: boolea
     };
   }
 
-  // "Provides line numbers"
+  // "Reports the specific line number where X" or "Provides line numbers"
   if (expLower.includes("line number")) {
-    // Strip markdown formatting for line number detection
     const stripped = output.replace(/\*\*/g, "").replace(/`/g, "");
+
+    // Check if the expectation mentions a specific line number to verify
+    const specificLineMatch = expectation.match(/line\s+(\d+)/i);
+    if (specificLineMatch) {
+      const expectedLine = specificLineMatch[1];
+      // Check that this specific number appears in a line-reference context
+      const hasSpecific =
+        new RegExp(`\\blines?\\s*:?\\s*~?${expectedLine}\\b`, "i").test(stripped) ||
+        stripped.includes(`:${expectedLine}`);
+      return {
+        passed: hasSpecific,
+        evidence: hasSpecific
+          ? `Found reference to line ${expectedLine}`
+          : `Line ${expectedLine} not referenced in output`,
+      };
+    }
+
+    // Generic "provides line numbers" — just check any line number exists
     const hasLineNumbers =
       /\blines?\s*:?\s*~?\d+/i.test(stripped) || /\(lines?\s+\d+\)/i.test(stripped) || /\bL\d+\b/.test(stripped);
     return {
