@@ -166,6 +166,19 @@ for (const evalDef of evalsToRun) {
       writeFileSync(join(runDir, "output.md"), result.output);
       writeFileSync(join(runDir, "prompt.txt"), result.prompt);
       writeFileSync(
+        join(runDir, "timing.json"),
+        JSON.stringify(
+          {
+            duration_ms: result.duration_ms,
+            exit_code: result.exit_code,
+            model,
+            timestamp: new Date().toISOString(),
+          },
+          null,
+          2,
+        ),
+      );
+      writeFileSync(
         join(runDir, "eval_metadata.json"),
         JSON.stringify(
           {
