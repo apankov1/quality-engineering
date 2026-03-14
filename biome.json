@@ -25,6 +25,6 @@
   },
   "files": {
     "include": ["skills/**/*.ts"],
-    "ignore": ["node_modules"]
+    "ignore": ["node_modules", "skills/*/evals/fixtures"]
   }
 }

@@ -14,9 +14,10 @@ const evalsPath = join(import.meta.dirname, "evals.json");
 const evalsData = JSON.parse(readFileSync(evalsPath, "utf-8"));
 
 const requestedIds = process.argv.slice(2).map(Number);
-const evalsToRun = requestedIds.length > 0
-  ? evalsData.evals.filter((e: any) => requestedIds.includes(e.id))
-  : evalsData.evals.slice(0, 3);
+const evalsToRun =
+  requestedIds.length > 0
+    ? evalsData.evals.filter((e: { id: number }) => requestedIds.includes(e.id))
+    : evalsData.evals.slice(0, 3);
 
 for (const eval_ of evalsToRun) {
   console.log(`\n${"=".repeat(70)}`);
@@ -38,15 +39,13 @@ for (const eval_ of evalsToRun) {
   // Run analysis
   const report = analyzeTestFile(source, fixturePath, config);
   const ruleNames = report.findings.map((f) => f.rule);
-  const testNames = report.findings.map((f) => f.testName);
-  const severities = report.findings.map((f) => f.severity);
 
   // Print report
-  console.log(`\n--- Skill Output ---`);
+  console.log("\n--- Skill Output ---");
   console.log(formatReport(report));
 
   // Check expectations
-  console.log(`\n--- Expectation Check ---`);
+  console.log("\n--- Expectation Check ---");
   const gt = eval_.ground_truth;
   let passed = 0;
   let failed = 0;
@@ -101,7 +100,7 @@ for (const eval_ of evalsToRun) {
   }
 
   // Now check natural-language expectations (heuristic matching)
-  console.log(`\n--- Natural Language Expectations ---`);
+  console.log("\n--- Natural Language Expectations ---");
   for (const exp of eval_.expectations) {
     const expLower = exp.toLowerCase();
     let matched = false;
