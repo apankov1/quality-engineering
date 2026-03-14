@@ -1,6 +1,6 @@
 ---
 name: pairwise-test-coverage
-description: "Combinatorial testing with a greedy pairwise matrix generator. Covers all factor pairs in near-minimal test cases."
+description: "Combinatorial testing with a greedy pairwise matrix generator. Covers all factor pairs in near-minimal test cases. Use when the user wants to generate a pairwise or threewise test matrix, reduce a Cartesian product, create all-pairs test cases, or asks how many test cases are needed to cover all pairs of their factors. Trigger on: 'pairwise', 'all-pairs', 'test matrix', 'combinatorial', 'factor combinations', 'threewise', 'reduce test combinations'."
 ---
 
 # Pairwise Test Coverage

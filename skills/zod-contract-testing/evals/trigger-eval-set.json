@@ -1,0 +1,22 @@
+[
+  {"query": "Test this Zod schema with valid and invalid inputs at the boundaries", "should_trigger": true},
+  {"query": "Generate compound state matrix for all optional field combinations", "should_trigger": true},
+  {"query": "Test schema evolution — does v2 still parse v1 data correctly?", "should_trigger": true},
+  {"query": "Write boundary tests for this Zod schema's refinements", "should_trigger": true},
+  {"query": "Verify the API response schema rejects malformed payloads", "should_trigger": true},
+  {"query": "Test all 2^N combinations of optional fields in this schema", "should_trigger": true},
+  {"query": "Write contract tests for this Zod schema", "should_trigger": true},
+  {"query": "Validate that the schema handles edge cases like empty strings and null", "should_trigger": true},
+  {"query": "Test schema backward compatibility across versions", "should_trigger": true},
+  {"query": "Generate version compatibility matrix for this schema's evolution", "should_trigger": true},
+  {"query": "Help me write a REST API endpoint for user registration", "should_trigger": false},
+  {"query": "Review this test file for weak patterns and quality issues", "should_trigger": false},
+  {"query": "Refactor this function to use async/await", "should_trigger": false},
+  {"query": "What's the best way to handle database migrations?", "should_trigger": false},
+  {"query": "Set up a CI pipeline with GitHub Actions", "should_trigger": false},
+  {"query": "Simulate a network failure in my integration test", "should_trigger": false},
+  {"query": "Optimize this SQL query that's running slowly", "should_trigger": false},
+  {"query": "How do I configure TypeScript strict mode?", "should_trigger": false},
+  {"query": "Check if this contract change is backward compatible", "should_trigger": false},
+  {"query": "Write a state machine transition matrix for the order lifecycle", "should_trigger": false}
+]

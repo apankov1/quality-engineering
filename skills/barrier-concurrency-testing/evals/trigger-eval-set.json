@@ -1,0 +1,22 @@
+[
+  {"query": "I need to test a race condition in my queue processor without using setTimeout", "should_trigger": true},
+  {"query": "How do I make my concurrency tests deterministic instead of flaky?", "should_trigger": true},
+  {"query": "Write a test that verifies two async operations interleave correctly", "should_trigger": true},
+  {"query": "My parallel test keeps failing intermittently — how do I control the timing?", "should_trigger": true},
+  {"query": "Test that items are preserved when concurrent writes happen to the same queue", "should_trigger": true},
+  {"query": "I need barriers to synchronize test threads at specific points", "should_trigger": true},
+  {"query": "How do I test what happens when two requests hit the same resource simultaneously?", "should_trigger": true},
+  {"query": "Reproduce a deadlock scenario in a test reliably", "should_trigger": true},
+  {"query": "Test sequence continuity after concurrent mutations", "should_trigger": true},
+  {"query": "Replace my setTimeout-based race condition test with something deterministic", "should_trigger": true},
+  {"query": "Help me write a REST API endpoint for user registration", "should_trigger": false},
+  {"query": "What's the best way to handle database migrations in PostgreSQL?", "should_trigger": false},
+  {"query": "Review this test file for weak patterns and quality issues", "should_trigger": false},
+  {"query": "Add error handling to this payment processing module", "should_trigger": false},
+  {"query": "Set up a CI pipeline with GitHub Actions for this Node.js project", "should_trigger": false},
+  {"query": "Debug this memory leak in the WebSocket connection handler", "should_trigger": false},
+  {"query": "Generate a Zod schema for this API response type", "should_trigger": false},
+  {"query": "Optimize this SQL query that's running slowly on large tables", "should_trigger": false},
+  {"query": "How do I configure TypeScript strict mode?", "should_trigger": false},
+  {"query": "Review this PR for breaking changes to our API contract", "should_trigger": false}
+]

@@ -1,6 +1,6 @@
 ---
 name: defect-first-testing
-description: "Reverses the test-writing workflow: analyze production code for its fault surface (what bugs could exist), then write tests targeting those specific defects. Use this skill whenever writing tests, generating test files, adding test coverage, or when asked to 'test this function' — prevents slop tests that compile and pass but catch zero bugs."
+description: "Use any time the user wants tests written for their code — 'write tests', 'add test coverage', 'test this function', 'test this module'. This is the primary test-authoring skill. Drives a defect-first workflow: analyze the production code for fault-prone patterns first, then write tests that target specific failure modes rather than just exercising the API. Produces tests that catch real bugs — not tests that compile and pass but detect nothing."
 ---
 
 # Defect-First Testing

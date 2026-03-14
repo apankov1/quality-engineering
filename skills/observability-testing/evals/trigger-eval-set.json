@@ -1,0 +1,22 @@
+[
+  {"query": "Test that the logger outputs structured JSON with the correct fields", "should_trigger": true},
+  {"query": "Verify that error logs include the stack trace and request context", "should_trigger": true},
+  {"query": "Write assertions for log level policy — no debug logs in production", "should_trigger": true},
+  {"query": "Create a mock logger for testing and assert on log entries", "should_trigger": true},
+  {"query": "Test that the service logs a warning when the cache miss rate exceeds threshold", "should_trigger": true},
+  {"query": "Verify structured log output includes correlation ID and timestamp", "should_trigger": true},
+  {"query": "How do I test that errors are logged with the correct severity level?", "should_trigger": true},
+  {"query": "Assert that no logs above 'info' level are emitted during normal operation", "should_trigger": true},
+  {"query": "Test the audit trail — verify log entries for each user action", "should_trigger": true},
+  {"query": "Write observability tests for this microservice", "should_trigger": true},
+  {"query": "Help me write a REST API endpoint for user registration", "should_trigger": false},
+  {"query": "Review this test file for weak patterns and quality issues", "should_trigger": false},
+  {"query": "Refactor this function to use async/await", "should_trigger": false},
+  {"query": "What's the best way to handle database migrations?", "should_trigger": false},
+  {"query": "Set up a CI pipeline with GitHub Actions", "should_trigger": false},
+  {"query": "Generate a Zod schema for this API response type", "should_trigger": false},
+  {"query": "Simulate a network failure in my integration test", "should_trigger": false},
+  {"query": "Optimize this SQL query that's running slowly", "should_trigger": false},
+  {"query": "How do I configure TypeScript strict mode?", "should_trigger": false},
+  {"query": "Check if this contract change is backward compatible", "should_trigger": false}
+]

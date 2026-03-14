@@ -1,0 +1,22 @@
+[
+  {"query": "Write tests for this function", "should_trigger": true},
+  {"query": "Add test coverage for the payment processing module", "should_trigger": true},
+  {"query": "What bugs could exist in this code? Write tests targeting those defects", "should_trigger": true},
+  {"query": "Analyze the fault surface of this function before writing tests", "should_trigger": true},
+  {"query": "Generate tests that actually catch real bugs, not just increase coverage", "should_trigger": true},
+  {"query": "Test this function — make sure the tests catch real defects", "should_trigger": true},
+  {"query": "I need tests for this utility module", "should_trigger": true},
+  {"query": "What could go wrong with this code? Write tests for those failure modes", "should_trigger": true},
+  {"query": "Add unit tests for the order service", "should_trigger": true},
+  {"query": "Write tests that target the most likely bugs in this parser", "should_trigger": true},
+  {"query": "Review this test file for weak patterns and quality issues", "should_trigger": false},
+  {"query": "Refactor this function to use async/await instead of callbacks", "should_trigger": false},
+  {"query": "Help me set up a Docker container for development", "should_trigger": false},
+  {"query": "What's the best way to handle database migrations?", "should_trigger": false},
+  {"query": "Check if this interface change will break existing clients", "should_trigger": false},
+  {"query": "Set up structured logging for this service", "should_trigger": false},
+  {"query": "How do I configure ESLint for TypeScript?", "should_trigger": false},
+  {"query": "Optimize this recursive function with memoization", "should_trigger": false},
+  {"query": "Debug this race condition in the WebSocket handler", "should_trigger": false},
+  {"query": "Generate a pairwise test matrix for these input combinations", "should_trigger": false}
+]

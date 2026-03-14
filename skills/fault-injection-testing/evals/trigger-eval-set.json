@@ -1,0 +1,22 @@
+[
+  {"query": "Test what happens when the database connection fails mid-transaction", "should_trigger": true},
+  {"query": "Write a circuit breaker test that verifies it opens after 3 failures", "should_trigger": true},
+  {"query": "How do I test retry logic with exponential backoff?", "should_trigger": true},
+  {"query": "Simulate a network failure in my integration test", "should_trigger": true},
+  {"query": "Test that the queue preserves items when the worker crashes", "should_trigger": true},
+  {"query": "Verify the circuit breaker transitions from open to half-open after the reset timeout", "should_trigger": true},
+  {"query": "Inject a storage failure and verify graceful degradation", "should_trigger": true},
+  {"query": "Test the retry policy — does it respect the max delay cap?", "should_trigger": true},
+  {"query": "What happens if the external API returns 500 three times in a row?", "should_trigger": true},
+  {"query": "Write resilience tests for this service that depends on an unreliable upstream", "should_trigger": true},
+  {"query": "Help me write a REST API endpoint for user registration", "should_trigger": false},
+  {"query": "Review this test file for weak patterns and quality issues", "should_trigger": false},
+  {"query": "Refactor this function to use async/await", "should_trigger": false},
+  {"query": "What's the best way to handle database migrations?", "should_trigger": false},
+  {"query": "Set up a CI pipeline with GitHub Actions", "should_trigger": false},
+  {"query": "Generate a Zod schema for this API response type", "should_trigger": false},
+  {"query": "How do I configure TypeScript strict mode?", "should_trigger": false},
+  {"query": "Add structured logging to this payment service", "should_trigger": false},
+  {"query": "Optimize this SQL query that's running slowly", "should_trigger": false},
+  {"query": "Check if this contract change is backward compatible", "should_trigger": false}
+]

@@ -1,6 +1,6 @@
 ---
 name: model-based-testing
-description: Tests state machine transitions with XState-style patterns. Validates transition matrices, guard truth tables, context mutations, and terminal state handling.
+description: "Use for state machine testing: generating transition matrices, testing all N×N state pairs (valid and invalid), guard truth tables, context mutation assertions, terminal state verification, and Given-When-Then event replay for event-sourced aggregates. Trigger on: 'transition matrix', 'state machine tests', 'XState', 'workflow state transitions', 'lifecycle states', 'guard functions', 'context mutations', 'terminal states', 'event replay testing'. Use when the user wants to systematically cover state transitions — not just the happy path. Skip for stateless functions, pure data transforms, or simple CRUD."
 ---
 
 # Model-Based Testing
