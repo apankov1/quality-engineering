@@ -1,6 +1,6 @@
 ---
 name: slop-test-detector
-description: "Static analyzer that detects 18 slop patterns in test code — tests that compile and pass but catch zero bugs. Use when reviewing test files, auditing test quality, checking for weak tests, validating generated tests, or when the user mentions test slop, empty tests, missing assertions, or tautological checks. TRIGGER on any test review or test quality task."
+description: "Use for any test-file inspection task — whether the user names specific patterns (commented-out assertions, truthiness-only checks, empty test bodies, tautological assertions, duplicate tests, missing error cases, Defect: comment convention) or asks generally about test quality, weakness, or whether tests always pass regardless of behavior. Trigger on: reviewing or auditing any spec/test file, 'review this test file for weak patterns', 'run the slop detector', 'validate generated tests', 'do these tests actually catch bugs', 'enforce Defect: comments', 'tests that always pass', 'quality issues in tests', or checking if tests pass without verifying anything. Skip for: writing new tests, measuring coverage, or reviewing production code."
 ---
 
 # Slop Test Detector

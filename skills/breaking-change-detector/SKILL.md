@@ -1,6 +1,6 @@
 ---
 name: breaking-change-detector
-description: "Audit 6 categories of breaking changes with executable checks for contracts, API diffs, serialized state, and event types."
+description: "Use for backward compatibility audits, serialization safety, and breaking change detection. Also use when checking if a Zod schema has .catch() defaults for Durable Object snapshots or hibernation. Trigger on ANY of: 'will this break existing clients', 'is this change safe', 'breaking changes', 'contract migration', 'backward compatible', 'field removal', 'enum value changes', 'status code changes', 'event type rename', 'replay safety', 'does fromJSON use safeParse or parse', '.catch() defaults', 'hibernation safety', 'Durable Object snapshot', 'narrowing a type', 'is this safe to merge', 'API contract safety'. Covers contracts, API endpoints, database schema, serialized state, WebSocket protocols, and event sourcing. Skip for internal refactoring or adding new optional fields."
 ---
 
 # Breaking Change Detector
