@@ -1,5 +1,6 @@
 /**
  * Billing service contract — v5 migration
+ * (Response contract: server returns this to API consumers)
  *
  * This change looks breaking at first glance but is actually safe:
  * - `legacyPlanId` is deprecated but still present and optional
