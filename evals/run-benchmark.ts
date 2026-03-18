@@ -18,6 +18,7 @@
 import { execSync } from "node:child_process";
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { basename, join, resolve } from "node:path";
+import { wrapPromptForStructuredOutput } from "./prompts.ts";
 
 // --- Parse args ---
 const args = process.argv.slice(2);
@@ -195,7 +196,7 @@ function parseClaudeJsonOutput(raw: string): ParsedOutput {
 
 // --- Run a single eval ---
 function runEval(
-  evalDef: { id: number; name: string; prompt: string; files: string[] },
+  evalDef: { id: number; name: string; prompt: string; files: string[]; grading_mode?: string },
   config: "with_skill" | "without_skill",
   runNumber: number,
 ): RunResult {
@@ -203,9 +204,13 @@ function runEval(
   const fixtureRelPath = evalDef.files[0];
   const fixturePath = join(skillDir, fixtureRelPath);
   const fixtureContent = readFileSync(fixturePath, "utf-8");
-  const fixtureFilename = fixtureRelPath.split("/").pop();
+  const fixtureFilename = fixtureRelPath.split("/").pop() ?? fixtureRelPath;
 
-  const fullPrompt = `${evalDef.prompt}\n\nFile: ${fixtureFilename}\n\`\`\`typescript\n${fixtureContent}\n\`\`\``;
+  // Use structured output wrapper unless grading_mode is prose_heuristic
+  const useStructured = evalDef.grading_mode !== "prose_heuristic";
+  const fullPrompt = useStructured
+    ? wrapPromptForStructuredOutput(evalDef.prompt, fixtureFilename, fixtureContent)
+    : `${evalDef.prompt}\n\nFile: ${fixtureFilename}\n\`\`\`typescript\n${fixtureContent}\n\`\`\``;
 
   // Write prompt to temp file to avoid shell escaping issues
   const promptFile = join(tempDir, `prompt-${evalDef.id}-${config}-${runNumber}.txt`);

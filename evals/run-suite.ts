@@ -183,11 +183,20 @@ for (const skillDir of skillDirs) {
   if (validLine) console.log(validLine);
 
   // ============================================================
-  // Step 4: Grade
+  // Step 4: Grade (JSON first, prose fallback)
   // ============================================================
+  const jsonGradeResult = run(
+    `npx tsx evals/grade-json.ts ${benchmarkDir}`,
+    `Step 4a: JSON grade (${skillName})`,
+  );
+  if (jsonGradeResult.ok) {
+    const parseLine = jsonGradeResult.output.split("\n").find((l) => l.includes("parse rate"));
+    if (parseLine) console.log(parseLine);
+  }
+
   const gradeResult = run(
     `npx tsx evals/grade-output.ts ${benchmarkDir}`,
-    `Step 4: Grade (${skillName})`,
+    `Step 4b: Prose grade (${skillName})`,
   );
 
   // Extract aggregate results

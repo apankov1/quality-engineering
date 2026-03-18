@@ -313,13 +313,13 @@
         "evals/fixtures/false-positive-deprecation.ts"
       ],
       "expectations": [
-        "Classifies 'planName' change as safe (made optional, not removed)",
-        "Does NOT flag deprecated 'planName' as a breaking removal",
-        "Classifies 'legacyPlanId' change as safe (made optional, not removed)",
-        "Does NOT flag 'planName' as removed",
+        "Classifies 'planName' as safe (deprecated but still present and required)",
+        "Does NOT flag 'planName' as breaking",
+        "Classifies 'legacyPlanId' as safe (deprecated but still present and required)",
+        "Does NOT flag 'legacyPlanId' as breaking",
         "Classifies widening of 'currency' as safe",
         "Classifies addition of optional 'billingCycle' as safe",
-        "Reports overall change as safe and backward-compatible"
+        "Reports overall change as safe or backward-compatible"
       ],
       "ground_truth": {
         "all_safe": true,
