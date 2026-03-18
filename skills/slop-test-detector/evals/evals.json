@@ -1,14 +1,14 @@
 {
   "skill_name": "slop-test-detector",
   "benchmark_question": "Does slop-test-detector make the model better at reviewing test files for weak tests than baseline?",
-  "prompt_design": "All evals use the same neutral prompt for both with_skill and without_skill conditions. The only variable is whether the skill is available in the execution context (project directory with skills installed vs clean temp directory).",
   "evals": [
     {
       "id": 1,
       "name": "empty-and-commented",
       "prompt": "Review this test file for weak test patterns and quality issues. For each issue found, report: the pattern name, the test name, the line number, the severity (must-fail vs should-fail), and explain the impact. If the file is clean, say so.",
-      "files": ["evals/fixtures/empty-and-commented.spec.ts"],
-      "expected_output": "Detects empty_test_body and commented_out_assertions as must-fail, plus no_production_call",
+      "files": [
+        "evals/fixtures/empty-and-commented.spec.ts"
+      ],
       "expectations": [
         "Identifies empty test body on 'should process refund for valid transaction'",
         "Identifies empty test body on 'should validate card number format before charging'",
@@ -20,19 +20,49 @@
         "Provides line numbers for each finding"
       ],
       "ground_truth": {
-        "expected_rules": ["empty_test_body", "commented_out_assertions", "no_production_call"],
-        "forbidden_rules_on_clean_tests": ["should reject expired cards"],
+        "expected_rules": [
+          "empty_test_body",
+          "commented_out_assertions",
+          "no_production_call"
+        ],
+        "forbidden_rules_on_clean_tests": [
+          "should reject expired cards"
+        ],
         "score": 18,
         "must_fail_count": 3,
         "should_fail_count": 1
+      },
+      "split": "dev",
+      "eval_type": "forced_skill_quality",
+      "grading_mode": "json_contains",
+      "expected_json": {
+        "overall_verdict": "unsafe",
+        "expected_findings": [
+          {
+            "rule": "empty_test_body"
+          },
+          {
+            "rule": "commented_out_assertions"
+          },
+          {
+            "rule": "no_production_call"
+          }
+        ],
+        "forbidden_findings": [
+          {
+            "rule": "*",
+            "target": "should reject expired cards"
+          }
+        ]
       }
     },
     {
       "id": 2,
       "name": "tautological-circus",
       "prompt": "Review this test file for weak test patterns and quality issues. For each issue found, report: the pattern name, the test name, the line number, the severity (must-fail vs should-fail), and explain the impact. If the file is clean, say so.",
-      "files": ["evals/fixtures/tautological-circus.spec.ts"],
-      "expected_output": "Detects tautological_assertion, conditional_assertion, truthiness_only, and no_production_call",
+      "files": [
+        "evals/fixtures/tautological-circus.spec.ts"
+      ],
       "expectations": [
         "Identifies tautological assertion on 'should hash password' (assert.ok(true))",
         "Identifies tautological assertion on 'should match known hash' (identical string literals)",
@@ -44,19 +74,57 @@
         "Explains that assertions inside if blocks may never execute"
       ],
       "ground_truth": {
-        "expected_rules": ["tautological_assertion", "conditional_assertion", "truthiness_only", "no_negative_test", "no_production_call"],
-        "forbidden_rules_on_clean_tests": ["should generate valid JWT with correct claims"],
+        "expected_rules": [
+          "tautological_assertion",
+          "conditional_assertion",
+          "truthiness_only",
+          "no_negative_test",
+          "no_production_call"
+        ],
+        "forbidden_rules_on_clean_tests": [
+          "should generate valid JWT with correct claims"
+        ],
         "score": 3,
         "must_fail_count": 3,
         "should_fail_count": 3
+      },
+      "split": "dev",
+      "eval_type": "forced_skill_quality",
+      "grading_mode": "json_contains",
+      "expected_json": {
+        "overall_verdict": "unsafe",
+        "expected_findings": [
+          {
+            "rule": "tautological_assertion"
+          },
+          {
+            "rule": "conditional_assertion"
+          },
+          {
+            "rule": "truthiness_only"
+          },
+          {
+            "rule": "no_negative_test"
+          },
+          {
+            "rule": "no_production_call"
+          }
+        ],
+        "forbidden_findings": [
+          {
+            "rule": "*",
+            "target": "should generate valid JWT with correct claims"
+          }
+        ]
       }
     },
     {
       "id": 3,
       "name": "truthiness-and-type-only",
       "prompt": "Review this test file for weak test patterns and quality issues. For each issue found, report: the pattern name, the test name, the line number, the severity (must-fail vs should-fail), and explain the impact. If the file is clean, say so.",
-      "files": ["evals/fixtures/truthiness-and-type-only.spec.ts"],
-      "expected_output": "Detects truthiness_only, assert_on_type_not_value, and assert_return_type_only",
+      "files": [
+        "evals/fixtures/truthiness-and-type-only.spec.ts"
+      ],
       "expectations": [
         "Identifies typeof-only assertions on 'should detect column types'",
         "Identifies truthiness-only pattern on 'should generate report ID'",
@@ -67,19 +135,53 @@
         "Provides line numbers for each finding"
       ],
       "ground_truth": {
-        "expected_rules": ["assert_on_type_not_value", "truthiness_only", "assert_return_type_only", "no_negative_test"],
-        "forbidden_rules_on_clean_tests": ["should aggregate numeric columns with correct totals"],
+        "expected_rules": [
+          "assert_on_type_not_value",
+          "truthiness_only",
+          "assert_return_type_only",
+          "no_negative_test"
+        ],
+        "forbidden_rules_on_clean_tests": [
+          "should aggregate numeric columns with correct totals"
+        ],
         "score": 70,
         "must_fail_count": 0,
         "should_fail_count": 4
+      },
+      "split": "dev",
+      "eval_type": "forced_skill_quality",
+      "grading_mode": "json_contains",
+      "expected_json": {
+        "overall_verdict": "mixed",
+        "expected_findings": [
+          {
+            "rule": "assert_on_type_not_value"
+          },
+          {
+            "rule": "truthiness_only"
+          },
+          {
+            "rule": "assert_return_type_only"
+          },
+          {
+            "rule": "no_negative_test"
+          }
+        ],
+        "forbidden_findings": [
+          {
+            "rule": "*",
+            "target": "should aggregate numeric columns with correct totals"
+          }
+        ]
       }
     },
     {
       "id": 4,
       "name": "roundtrip-schema",
       "prompt": "Review this test file for weak test patterns and quality issues. For each issue found, report: the pattern name, the test name, the line number, the severity (must-fail vs should-fail), and explain the impact. If the file is clean, say so.",
-      "files": ["evals/fixtures/roundtrip-schema.spec.ts"],
-      "expected_output": "Detects literal roundtrip, schema success-only checks, and duplicate assertion sets",
+      "files": [
+        "evals/fixtures/roundtrip-schema.spec.ts"
+      ],
       "expectations": [
         "Identifies literal roundtrip on 'should store display name' (asserts same value used in construction)",
         "Identifies literal roundtrip on 'should preserve timezone'",
@@ -91,19 +193,49 @@
         "Does NOT report schema success-only on 'should reject profile with missing email' — it checks .error.issues"
       ],
       "ground_truth": {
-        "expected_rules": ["literal_roundtrip", "schema_success_only", "duplicate_assertion_set", "no_production_call", "no_negative_test"],
+        "expected_rules": [
+          "literal_roundtrip",
+          "schema_success_only",
+          "duplicate_assertion_set",
+          "no_production_call",
+          "no_negative_test"
+        ],
         "forbidden_rules_on_clean_tests": [],
         "score": 34,
         "must_fail_count": 0,
         "should_fail_count": 11
+      },
+      "split": "dev",
+      "eval_type": "forced_skill_quality",
+      "grading_mode": "json_contains",
+      "expected_json": {
+        "overall_verdict": "mixed",
+        "expected_findings": [
+          {
+            "rule": "literal_roundtrip"
+          },
+          {
+            "rule": "schema_success_only"
+          },
+          {
+            "rule": "duplicate_assertion_set"
+          },
+          {
+            "rule": "no_production_call"
+          },
+          {
+            "rule": "no_negative_test"
+          }
+        ]
       }
     },
     {
       "id": 5,
       "name": "duplicate-no-variation",
       "prompt": "Review this test file for weak test patterns and quality issues. For each issue found, report: the pattern name, the test name, the line number, the severity (must-fail vs should-fail), and explain the impact. If the file is clean, say so.",
-      "files": ["evals/fixtures/duplicate-no-variation.spec.ts"],
-      "expected_output": "Detects duplicate assertion sets and no input variation",
+      "files": [
+        "evals/fixtures/duplicate-no-variation.spec.ts"
+      ],
       "expectations": [
         "Identifies duplicate assertions between 'should shorten HTTP' and 'should shorten HTTPS'",
         "Identifies duplicate assertions between the two classify tests",
@@ -113,19 +245,49 @@
         "Does NOT flag 'should track click count per slug' — it has unique assertions and inputs"
       ],
       "ground_truth": {
-        "expected_rules": ["duplicate_assertion_set", "no_input_variation", "no_negative_test"],
-        "forbidden_rules_on_clean_tests": ["should track click count per slug"],
+        "expected_rules": [
+          "duplicate_assertion_set",
+          "no_input_variation",
+          "no_negative_test"
+        ],
+        "forbidden_rules_on_clean_tests": [
+          "should track click count per slug"
+        ],
         "score": 76,
         "must_fail_count": 0,
         "should_fail_count": 4
+      },
+      "split": "dev",
+      "eval_type": "forced_skill_quality",
+      "grading_mode": "json_contains",
+      "expected_json": {
+        "overall_verdict": "mixed",
+        "expected_findings": [
+          {
+            "rule": "duplicate_assertion_set"
+          },
+          {
+            "rule": "no_input_variation"
+          },
+          {
+            "rule": "no_negative_test"
+          }
+        ],
+        "forbidden_findings": [
+          {
+            "rule": "*",
+            "target": "should track click count per slug"
+          }
+        ]
       }
     },
     {
       "id": 6,
       "name": "no-negative-no-production",
       "prompt": "Review this test file for weak test patterns and quality issues. For each issue found, report: the pattern name, the test name, the line number, the severity (must-fail vs should-fail), and explain the impact. If the file is clean, say so.",
-      "files": ["evals/fixtures/no-negative-no-production.spec.ts"],
-      "expected_output": "Detects no negative tests and tests that call no production code",
+      "files": [
+        "evals/fixtures/no-negative-no-production.spec.ts"
+      ],
       "expectations": [
         "Identifies that the describe block has no negative tests (no throws/rejects)",
         "Identifies that 'should merge default values' calls no production code",
@@ -135,57 +297,156 @@
         "Explains that tests without production function calls test language guarantees, not app code"
       ],
       "ground_truth": {
-        "expected_rules": ["no_negative_test", "no_production_call"],
-        "forbidden_rules_on_clean_tests": ["should load config from JSON file", "should override values from environment variables"],
+        "expected_rules": [
+          "no_negative_test",
+          "no_production_call"
+        ],
+        "forbidden_rules_on_clean_tests": [
+          "should load config from JSON file",
+          "should override values from environment variables"
+        ],
         "score": 78,
         "must_fail_count": 0,
         "should_fail_count": 3
+      },
+      "split": "dev",
+      "eval_type": "forced_skill_quality",
+      "grading_mode": "json_contains",
+      "expected_json": {
+        "overall_verdict": "mixed",
+        "expected_findings": [
+          {
+            "rule": "no_negative_test"
+          },
+          {
+            "rule": "no_production_call"
+          }
+        ],
+        "forbidden_findings": [
+          {
+            "rule": "*",
+            "target": "should load config from JSON file"
+          },
+          {
+            "rule": "*",
+            "target": "should override values from environment variables"
+          }
+        ]
       }
     },
     {
       "id": 7,
       "name": "clean-contract",
-      "prompt": "Review this test file for weak test patterns and quality issues. For each issue found, report: the pattern name, the test name, the line number, the severity (must-fail vs should-fail), and explain the impact. If the file is clean, say so.",
-      "files": ["evals/fixtures/clean-contract.spec.ts"],
-      "expected_output": "No findings — well-written test file with proper assertions and negative tests",
+      "prompt": "Review this test file for the specific slop patterns: empty_test_body, commented_out_assertions, tautological_assertion, self_referential_assertion, conditional_assertion, truthiness_only, assert_on_type_not_value, duplicate_assertion_set, no_input_variation, literal_roundtrip, schema_success_only, vacuous_property, impossible_assertion, no_production_call. Report any matches found with pattern name, test name, line number, and severity. If none of these patterns are present, say the file is clean.",
+      "files": [
+        "evals/fixtures/clean-contract.spec.ts"
+      ],
       "expectations": [
-        "Reports zero findings or states no issues were detected",
-        "Does NOT flag any test in this file",
-        "Does NOT produce false positives on well-structured tests with proper assertions"
+        "Does NOT flag empty_test_body on any test",
+        "Does NOT flag tautological_assertion on any test",
+        "Does NOT flag truthiness_only on any test",
+        "Does NOT flag commented_out_assertions on any test",
+        "States the file is clean or has no slop patterns"
       ],
       "ground_truth": {
         "expected_rules": [],
-        "forbidden_rules_on_clean_tests": ["should deliver email notification", "should batch multiple recipients", "should throw on unsupported notification channel", "should respect quiet hours", "should redact PII"],
+        "forbidden_rules_on_clean_tests": [
+          "should deliver email notification",
+          "should batch multiple recipients",
+          "should throw on unsupported notification channel",
+          "should respect quiet hours",
+          "should redact PII"
+        ],
         "score": 100,
         "must_fail_count": 0,
         "should_fail_count": 0
+      },
+      "split": "holdout",
+      "eval_type": "forced_skill_quality",
+      "grading_mode": "json_contains",
+      "expected_json": {
+        "overall_verdict": "clean",
+        "forbidden_findings": [
+          {
+            "rule": "*",
+            "target": "should deliver email notification"
+          },
+          {
+            "rule": "*",
+            "target": "should batch multiple recipients"
+          },
+          {
+            "rule": "*",
+            "target": "should throw on unsupported notification channel"
+          },
+          {
+            "rule": "*",
+            "target": "should respect quiet hours"
+          },
+          {
+            "rule": "*",
+            "target": "should redact PII"
+          }
+        ]
       }
     },
     {
       "id": 8,
       "name": "clean-state-machine",
-      "prompt": "Review this test file for weak test patterns and quality issues. For each issue found, report: the pattern name, the test name, the line number, the severity (must-fail vs should-fail), and explain the impact. If the file is clean, say so.",
-      "files": ["evals/fixtures/clean-state-machine.spec.ts"],
-      "expected_output": "No findings — well-written state transition tests with proper error cases",
+      "prompt": "Review this test file for the specific slop patterns: empty_test_body, commented_out_assertions, tautological_assertion, self_referential_assertion, conditional_assertion, truthiness_only, assert_on_type_not_value, duplicate_assertion_set, no_input_variation, literal_roundtrip, schema_success_only, vacuous_property, impossible_assertion, no_production_call. Report any matches found with pattern name, test name, line number, and severity. If none of these patterns are present, say the file is clean.",
+      "files": [
+        "evals/fixtures/clean-state-machine.spec.ts"
+      ],
       "expectations": [
-        "Reports zero findings or states no issues were detected",
-        "Does NOT flag any test in this file",
-        "Does NOT produce false positives on state machine tests with throws assertions"
+        "Does NOT flag empty_test_body on any test",
+        "Does NOT flag tautological_assertion on any test",
+        "Does NOT flag conditional_assertion on any test",
+        "States the file is clean or has no slop patterns"
       ],
       "ground_truth": {
         "expected_rules": [],
-        "forbidden_rules_on_clean_tests": ["should start in pending state", "should transition pending to confirmed", "should reject invalid transitions", "should allow cancellation"],
+        "forbidden_rules_on_clean_tests": [
+          "should start in pending state",
+          "should transition pending to confirmed",
+          "should reject invalid transitions",
+          "should allow cancellation"
+        ],
         "score": 100,
         "must_fail_count": 0,
         "should_fail_count": 0
+      },
+      "split": "holdout",
+      "eval_type": "forced_skill_quality",
+      "grading_mode": "json_contains",
+      "expected_json": {
+        "overall_verdict": "clean",
+        "forbidden_findings": [
+          {
+            "rule": "*",
+            "target": "should start in pending state"
+          },
+          {
+            "rule": "*",
+            "target": "should transition pending to confirmed"
+          },
+          {
+            "rule": "*",
+            "target": "should reject invalid transitions"
+          },
+          {
+            "rule": "*",
+            "target": "should allow cancellation"
+          }
+        ]
       }
     },
     {
       "id": 9,
       "name": "false-positive-helpers",
       "prompt": "Review this test file for weak test patterns and quality issues. The file uses custom assertion helpers (assertEventEmitted, assertPayloadContains, testDeliveryOrder) that internally call assert.*. Take that into account when assessing test quality. Report any issues found.",
-      "files": ["evals/fixtures/false-positive-helpers.spec.ts"],
-      "expected_output": "Should recognize assertion equivalents and NOT flag tests as empty or truthiness-only",
+      "files": [
+        "evals/fixtures/false-positive-helpers.spec.ts"
+      ],
       "expectations": [
         "Does NOT flag empty test body on any test — assertion equivalents are present",
         "Does NOT flag truthiness-only on any test — helpers count as real assertions",
@@ -193,39 +454,83 @@
         "If it reports any findings, they are limited to missing negative tests"
       ],
       "ground_truth": {
-        "expected_rules": ["no_negative_test"],
+        "expected_rules": [
+          "no_negative_test"
+        ],
         "forbidden_rules_on_clean_tests": [],
         "score": 93,
         "must_fail_count": 0,
         "should_fail_count": 1
+      },
+      "split": "dev",
+      "eval_type": "forced_skill_quality",
+      "grading_mode": "json_contains",
+      "expected_json": {
+        "overall_verdict": "mixed",
+        "expected_findings": [
+          {
+            "rule": "no_negative_test"
+          }
+        ]
       }
     },
     {
       "id": 10,
       "name": "false-positive-conditional",
-      "prompt": "Review this test file for weak test patterns and quality issues. For each issue found, report: the pattern name, the test name, the line number, the severity (must-fail vs should-fail), and explain the impact. If the file is clean, say so.",
-      "files": ["evals/fixtures/false-positive-conditional.spec.ts"],
-      "expected_output": "No findings — conditional setup is different from conditional assertions, and commented code coexists with active assertions",
+      "prompt": "Review this test file for the specific slop patterns: empty_test_body, commented_out_assertions, tautological_assertion, self_referential_assertion, conditional_assertion, truthiness_only, assert_on_type_not_value, duplicate_assertion_set, no_input_variation, literal_roundtrip, schema_success_only, vacuous_property, impossible_assertion, no_production_call. Report any matches found with pattern name, test name, line number, and severity. If none of these patterns are present, say the file is clean.",
+      "files": [
+        "evals/fixtures/false-positive-conditional.spec.ts"
+      ],
       "expectations": [
-        "Reports zero findings or states no issues were detected",
-        "Does NOT flag conditional assertion — assertions are AFTER the if block, not inside it",
-        "Does NOT flag commented-out assertions — active assertions exist alongside commented ones",
-        "Does NOT produce false positives on this tricky file"
+        "Does NOT flag conditional_assertion — assertions are AFTER the if block, not inside it",
+        "Does NOT flag commented_out_assertions — active assertions exist alongside commented ones",
+        "Does NOT flag empty_test_body on any test",
+        "States the file is clean or has no slop patterns"
       ],
       "ground_truth": {
         "expected_rules": [],
-        "forbidden_rules_on_clean_tests": ["should return default value", "should evaluate flag based on user segment", "should track evaluation metrics", "should throw when flag configuration is invalid"],
+        "forbidden_rules_on_clean_tests": [
+          "should return default value",
+          "should evaluate flag based on user segment",
+          "should track evaluation metrics",
+          "should throw when flag configuration is invalid"
+        ],
         "score": 100,
         "must_fail_count": 0,
         "should_fail_count": 0
+      },
+      "split": "holdout",
+      "eval_type": "forced_skill_quality",
+      "grading_mode": "json_contains",
+      "expected_json": {
+        "overall_verdict": "clean",
+        "forbidden_findings": [
+          {
+            "rule": "*",
+            "target": "should return default value"
+          },
+          {
+            "rule": "*",
+            "target": "should evaluate flag based on user segment"
+          },
+          {
+            "rule": "*",
+            "target": "should track evaluation metrics"
+          },
+          {
+            "rule": "*",
+            "target": "should throw when flag configuration is invalid"
+          }
+        ]
       }
     },
     {
       "id": 11,
       "name": "property-and-vacuous",
       "prompt": "Review this test file for weak test patterns and quality issues. For each issue found, report: the pattern name, the test name, the line number, the severity (must-fail vs should-fail), and explain the impact. If the file is clean, say so.",
-      "files": ["evals/fixtures/property-and-vacuous.spec.ts"],
-      "expected_output": "Detects vacuous property test and impossible assertion",
+      "files": [
+        "evals/fixtures/property-and-vacuous.spec.ts"
+      ],
       "expectations": [
         "Identifies vacuous property test on 'should always return results' (return true with no assertions)",
         "Identifies impossible assertion on 'should return non-negative result count' (.length >= 0)",
@@ -235,19 +540,58 @@
         "Does NOT flag 'should handle empty query gracefully' — proper value assertion"
       ],
       "ground_truth": {
-        "expected_rules": ["vacuous_property", "impossible_assertion", "empty_test_body", "no_negative_test"],
-        "forbidden_rules_on_clean_tests": ["should rank exact matches higher than partial", "should handle empty query gracefully"],
+        "expected_rules": [
+          "vacuous_property",
+          "impossible_assertion",
+          "empty_test_body",
+          "no_negative_test"
+        ],
+        "forbidden_rules_on_clean_tests": [
+          "should rank exact matches higher than partial",
+          "should handle empty query gracefully"
+        ],
         "score": 53,
         "must_fail_count": 1,
         "should_fail_count": 3
+      },
+      "split": "dev",
+      "eval_type": "forced_skill_quality",
+      "grading_mode": "json_contains",
+      "expected_json": {
+        "overall_verdict": "unsafe",
+        "expected_findings": [
+          {
+            "rule": "vacuous_property"
+          },
+          {
+            "rule": "impossible_assertion"
+          },
+          {
+            "rule": "empty_test_body"
+          },
+          {
+            "rule": "no_negative_test"
+          }
+        ],
+        "forbidden_findings": [
+          {
+            "rule": "*",
+            "target": "should rank exact matches higher than partial"
+          },
+          {
+            "rule": "*",
+            "target": "should handle empty query gracefully"
+          }
+        ]
       }
     },
     {
       "id": 12,
       "name": "defect-comments",
       "prompt": "Review this test file for weak test patterns and quality issues. This project enforces a convention where each test must have a preceding '// Defect:' comment explaining what production bug the test catches. Check for missing or trivial defect comments. Report all findings.",
-      "files": ["evals/fixtures/defect-comments.spec.ts"],
-      "expected_output": "Detects missing and trivial defect comments",
+      "files": [
+        "evals/fixtures/defect-comments.spec.ts"
+      ],
       "expectations": [
         "Identifies missing defect comment on 'should evict least recently used entry'",
         "Identifies missing defect comment on 'should respect max size limit'",
@@ -257,19 +601,49 @@
         "Explains that trivial defect comments (too few words) don't convey enough information"
       ],
       "ground_truth": {
-        "expected_rules": ["missing_defect_comment", "trivial_defect_comment", "no_negative_test"],
-        "forbidden_rules_on_clean_tests": ["should update access order on get to maintain LRU invariant"],
+        "expected_rules": [
+          "missing_defect_comment",
+          "trivial_defect_comment",
+          "no_negative_test"
+        ],
+        "forbidden_rules_on_clean_tests": [
+          "should update access order on get to maintain LRU invariant"
+        ],
         "score": 70,
         "must_fail_count": 0,
         "should_fail_count": 4
+      },
+      "split": "holdout",
+      "eval_type": "forced_skill_quality",
+      "grading_mode": "json_contains",
+      "expected_json": {
+        "overall_verdict": "mixed",
+        "expected_findings": [
+          {
+            "rule": "missing_defect_comment"
+          },
+          {
+            "rule": "trivial_defect_comment"
+          },
+          {
+            "rule": "no_negative_test"
+          }
+        ],
+        "forbidden_findings": [
+          {
+            "rule": "*",
+            "target": "should update access order on get to maintain LRU invariant"
+          }
+        ]
       }
     },
     {
       "id": 13,
       "name": "self-referential",
       "prompt": "Review this test file for weak test patterns and quality issues. For each issue found, report: the pattern name, the test name, the line number, the severity (must-fail vs should-fail), and explain the impact. If the file is clean, say so.",
-      "files": ["evals/fixtures/self-referential.spec.ts"],
-      "expected_output": "Detects self-referential assertions where assert.equal(x, x) compares a variable to itself",
+      "files": [
+        "evals/fixtures/self-referential.spec.ts"
+      ],
       "expectations": [
         "Identifies self-referential assertion on 'should track stock level' (assert.equal(stock, stock))",
         "Identifies self-referential assertion on 'should calculate reorder point' (assert.equal(point, point))",
@@ -279,40 +653,125 @@
         "Does NOT flag 'should throw when fulfilling more than available' — proper throws assertion"
       ],
       "ground_truth": {
-        "expected_rules": ["self_referential_assertion"],
-        "forbidden_rules_on_clean_tests": ["should deduct stock on order fulfillment", "should throw when fulfilling more than available"],
+        "expected_rules": [
+          "self_referential_assertion"
+        ],
+        "forbidden_rules_on_clean_tests": [
+          "should deduct stock on order fulfillment",
+          "should throw when fulfilling more than available"
+        ],
         "score": 50,
         "must_fail_count": 2,
         "should_fail_count": 0
+      },
+      "split": "dev",
+      "eval_type": "forced_skill_quality",
+      "grading_mode": "json_contains",
+      "expected_json": {
+        "overall_verdict": "unsafe",
+        "expected_findings": [
+          {
+            "rule": "self_referential_assertion"
+          }
+        ],
+        "forbidden_findings": [
+          {
+            "rule": "*",
+            "target": "should deduct stock on order fulfillment"
+          },
+          {
+            "rule": "*",
+            "target": "should throw when fulfilling more than available"
+          }
+        ]
       }
     }
   ],
   "rule_coverage_matrix": {
-    "empty_test_body": [1, 11],
-    "commented_out_assertions": [1],
-    "tautological_assertion": [2],
-    "conditional_assertion": [2],
-    "truthiness_only": [2, 3],
-    "assert_on_type_not_value": [3],
-    "assert_return_type_only": [3],
-    "literal_roundtrip": [4],
-    "schema_success_only": [4],
-    "duplicate_assertion_set": [4, 5],
-    "no_input_variation": [5],
-    "no_negative_test": [2, 3, 4, 5, 6, 9, 11, 12],
-    "no_production_call": [1, 2, 4, 6],
-    "vacuous_property": [11],
-    "impossible_assertion": [11],
-    "missing_defect_comment": [12],
-    "trivial_defect_comment": [12],
-    "self_referential_assertion": [13]
+    "empty_test_body": [
+      1,
+      11
+    ],
+    "commented_out_assertions": [
+      1
+    ],
+    "tautological_assertion": [
+      2
+    ],
+    "conditional_assertion": [
+      2
+    ],
+    "truthiness_only": [
+      2,
+      3
+    ],
+    "assert_on_type_not_value": [
+      3
+    ],
+    "assert_return_type_only": [
+      3
+    ],
+    "literal_roundtrip": [
+      4
+    ],
+    "schema_success_only": [
+      4
+    ],
+    "duplicate_assertion_set": [
+      4,
+      5
+    ],
+    "no_input_variation": [
+      5
+    ],
+    "no_negative_test": [
+      2,
+      3,
+      4,
+      5,
+      6,
+      9,
+      11,
+      12
+    ],
+    "no_production_call": [
+      1,
+      2,
+      4,
+      6
+    ],
+    "vacuous_property": [
+      11
+    ],
+    "impossible_assertion": [
+      11
+    ],
+    "missing_defect_comment": [
+      12
+    ],
+    "trivial_defect_comment": [
+      12
+    ],
+    "self_referential_assertion": [
+      13
+    ]
   },
   "benchmark_config": {
     "runs_per_configuration": 5,
-    "configurations": ["with_skill", "without_skill"],
-    "holdout_evals": [7, 8, 10, 12],
-    "model": "claude-sonnet-4-20250514",
+    "configurations": [
+      "with_skill",
+      "without_skill"
+    ],
+    "holdout_evals": [
+      7,
+      8,
+      10,
+      12
+    ],
+    "model": "claude-sonnet-4-6",
     "preset": "balanced",
-    "strict_preset_evals": [12]
+    "strict_preset_evals": [
+      12
+    ]
   }
 }
