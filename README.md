@@ -61,43 +61,17 @@ Before building a QA/testing skill, try the same prompt without any skill. If th
 
 If the skill just teaches techniques the model already knows, it adds context tokens without adding value.
 
-## Author's testing.md
+## Author's testing rules
 
-After retiring the skills, the testing guidance that remains is a 35-line philosophy file used as a Claude Code rule (`.claude/rules/testing.md`). It encodes the principles that survived the evaluation — the stuff that actually matters for test quality:
+After retiring the skills, the testing guidance that remains is a structured ruleset used as a Claude Code rule. It encodes the pre-test gate, quality standards, and anti-patterns that survived the evaluation — evolved from a 35-line philosophy into a full testing contract:
 
 See [testing-rules/testing.md](testing-rules/testing.md) for the full file.
 
-```markdown
-# Testing
-
-## Test real systems, not simulations
-
-No mocks. Integration tests with real bindings (Miniflare for D1/KV/R2).
-vi.fn() only for platform APIs unavailable in test (WebSocket, ExecutionContext).
-
-Why: mocked tests pass while prod breaks. The mock diverges from the real
-system silently. If you can test against the real thing, do it.
-
-## Test the boundary, not the internals
-
-Call the exported function. If deleting the call site doesn't break the test,
-you're testing the wrong layer. Never write inline "simulators" that copy
-production logic — import and call the actual code.
-
-## Bugs get tests first
-
-Write the failing test. Verify it fails for the right reason. Then fix.
-This order is non-negotiable — it proves the test actually catches the bug.
-
-## What to test
-
-- **Defect-first**: find fault-prone patterns, target those
-- **State machines**: all N×N transitions, not just happy path
-- **Combinatorial inputs**: pairwise coverage for multi-factor scenarios
-- **Boundaries**: Zod parse at every trust boundary
-```
-
-This is the behavioral instruction that 14 skills couldn't improve on.
+Key elements:
+- **Pre-test gate** — a 6-step mandatory process before writing any test (read the requirement, read the implementation, select QA technique, enumerate cases, write AAA tests, self-verify)
+- **QA technique matching** — equivalence partitioning, boundary value analysis, decision tables, state transition testing matched per function
+- **Quality standards** with MUST/SHOULD priority markers
+- **Anti-patterns table** — 8 explicitly forbidden patterns (tautological assertions, mock-the-SUT, truthiness-only, etc.)
 
 ## License
 
